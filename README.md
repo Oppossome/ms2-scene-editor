@@ -1,0 +1,75 @@
+# BannedStory2 – MapleStory 2 asset extraction
+
+Tools for unpacking the (discontinued) MapleStory 2 Steam install. Personal use only; don't redistribute the assets.
+
+Node isn't installed globally on this machine, so every command runs inside `nix shell`.
+
+## Layout of the game files
+
+| Source | Format | Handled by |
+| --- | --- | --- |
+| `Data/**/*.m2d` + `.m2h` (23 archives listed in `PackClient.ini`) | `MS2F` pack (AES-CTR + zlib, or XOR for movies) | `cmd/extract/extract.js` |
+| `Data/Sound/*.fsb` | FMOD FSB5 banks | `cmd/extract/convert-audio.sh` |
+| `Custom/`, `Data/Shaders/`, `Data/Resource/gfx/` | loose files | `cmd/extract/copy-loose.js` |
+
+`vendor/maple2-file-io` is [shuabritze/maple2-file-io](https://github.com/shuabritze/maple2-file-io) (MIT) with two local fixes:
+
+- `AESCipher.transformBlock` now uses Node's native `aes-256-ctr` (output verified byte-identical; the original was ~1 MB/s, now it extracts all 17 GB in a few minutes).
+- XOR-flagged entries (`0xFF000000`, used by `Movie/*` and one Gfx file) were decrypted through the AES path and the XOR routine ignored its key. XOR is checked first and is now `data[i] ^= key[i % 2048]`.
+
+## Usage
+
+```sh
+# one-time: build the vendored reader
+nix shell nixpkgs#nodejs --command npm run build:vendor
+
+# extract every archive to extracted/ (resumable; pass substrings to select archives, --list to only list entries)
+nix shell nixpkgs#nodejs --command node cmd/extract/extract.js [Model/Npc ...]
+
+# loose files
+nix shell nixpkgs#nodejs --command node cmd/extract/copy-loose.js
+
+# conversions (output in extracted/converted/)
+nix shell nixpkgs#vgmstream nixpkgs#ffmpeg --command bash cmd/extract/convert-audio.sh   # FSB  -> OGG, one folder per bank
+nix shell nixpkgs#imagemagick --command bash cmd/extract/convert-textures.sh [Resource]  # DDS  -> PNG
+nix shell nixpkgs#ffmpeg nixpkgs#vgmstream --command bash cmd/extract/convert-video.sh   # USM  -> MP4
+nix shell nixpkgs#nodejs --command node cmd/extract/nif-thumbnails.js                    # NIF  -> embedded PNG previews
+nix shell nixpkgs#nodejs --command node cmd/extract/nif/convert-all.js [Npc Map ...]     # NIF  -> GLB (needs the DDS->PNG step first)
+nix shell nixpkgs#nodejs --command node cmd/extract/nif/to-gltf.js in.nif out.glb [--external-textures] [--animations]   # single file, textures embedded by default
+nix shell nixpkgs#nodejs --command node cmd/extract/nif/verify.js [nif|kf]        # re-check parsers against every block size
+```
+
+### Model format notes
+
+The NIFs are standard Gamebryo 4 files, version **30.2.0.3** (a handful are 30.1.0.3/30.0.0.2/20.9.0.x), as described by the [niftools nif.xml](https://github.com/niftools/nifxml) spec, which lists MapleStory 2 under that version. They use NiMesh + NiDataStream (interleaved vertex streams) rather than NiTriShape. Header quirks: a `Metadata` byte array (holds the PNG thumbnail) follows the block count, and block-type indices carry a high flag bit (mask `0x7FFF`).
+
+`cmd/extract/nif/` has hand-written parsers for the geometry, material, skinning and animation blocks (NiNode, NiMesh, NiDataStream, NiTexturingProperty, NiSourceTexture, NiMaterialProperty, NiAlphaProperty, NiSkinningMeshModifier, NiSequenceData, NiTransformEvaluator, NiBSplineCompTransformEvaluator, NiBSplineData, NiBSplineBasisData, NiTransformData, NiTextKeyExtraData). `verify.js` checks each parser against the exact per-block size in the NIF header (`node cmd/extract/nif/verify.js nif` and `... kf`): all 779k geometry blocks, 334k material/texture blocks, 16k skinning modifiers and 2M animation blocks match.
+
+**Skinning.** Skinned meshes store bind-pose streams (`POSITION_BP`, `NORMAL_BP`), `BLENDINDICES` (u8x4) and `BLENDWEIGHT` (only 3 floats, the 4th is implied), plus a per-submesh `BONE_PALETTE` that maps local indices to the modifier's bone list. The modifier's bone transforms are the glTF inverse bind matrices.
+
+**Animation.** `.kf` files use Gamebryo's evaluator system. Most channels are `NiBSplineCompTransformEvaluator`: 16-bit compressed control points (`offset + halfRange * short / 32767`) on a clamped uniform cubic B-spline, which `animation.js` samples at 30 fps. Keyframed channels keep their key times, and channels that never change collapse to a single key. Clips target bones by node name, and quaternions are stored `w, x, y, z`.
+
+**Pairing and layout.** A model's clips are the `.kf` files in its folder (in folders holding several models, only clips whose bones mostly exist in the model).
+- Up to 64 clips are embedded in the model's GLB.
+- Larger sets (the 1,900-clip male/female bodies) get one skeleton-only GLB per clip in `<model>.anims/`, or in `<folder>/_clips/` when the folder holds several models that share a skeleton. Load those onto the model in Blender or similar by matching bone names.
+- Text keys (`start`, `end`, `hit`, ...) are in each animation's `extras.textKeys`.
+
+Override the game location with `MS2_DIR=/path/to/MapleStory\ 2`.
+
+## Extracted content (`extracted/`)
+
+- `Xml/` (115k XML: items, NPCs, skills, maps, quests...), `Resource/Exported` (`.flat`/`.xblock` map definitions), `Resource/Library`, `lua/`.
+- `Resource/Image` (UI/item icons, DDS + PNG), `Resource/Gfx` (Scaleform `.gfx` + DDS).
+- `Resource/Model/*` – Gamebryo `.nif` meshes, `.kf`/`.kfm` animations, `Textures` (DDS, `.ifl` flipbooks), `Resource/PrecomputedTerrain` (`.tok`).
+- `Resource/Movie` – CRI `.usm` videos.
+- `manifest`: each archive folder has `_manifest.json` (entry names, sizes, failures).
+
+## Known gaps
+
+- **Models are exported with skeletons, skins and skeletal animation**, but without morph targets (facial/blend shapes), particle systems, material/visibility animation (float and bool evaluators) or shader effects. The character body renders white because the game tints skin at runtime. Quadratic/TBC key interpolation is approximated as linear. 2,113 NIFs have no renderable geometry (lights, cameras, pure particle/effect nodes) and produce no GLB; 41 referenced textures don't exist in the archives.
+- The `Path` and `Camera` NIFs are mostly helper nodes, so few of them produce GLBs.
+- `extracted/converted/model-previews/` holds the PNG thumbnails stored in each NIF's header metadata (about 9.7k of the 28.6k NIFs have one).
+- `.gfx` (Scaleform/SWF-like UI), `.tok` terrain, `.kfm` animation managers (transition tables) and `.fxo` shaders are left as raw extracted files.
+- `GfxDebug` and `XmlDebug` archives are listed in `PackClient.ini` but not shipped.
+- All 368 non-empty USMs and 51.6k DDS convert without failures, but the converted `Movie/Common` MP4s are **video-only**: ffmpeg can't decode the USM audio track and vgmstream can't open it either.
+- Failures are logged to `convert-video.failed.log` / `convert-textures.failed.log`.

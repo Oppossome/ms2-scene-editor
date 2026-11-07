@@ -1,0 +1,11 @@
+{
+  "name": "bannedstory2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Extract and convert MapleStory 2 assets",
+  "scripts": {
+    "extract": "node cmd/extract/extract.js",
+    "copy-loose": "node cmd/extract/copy-loose.js",
+    "build:vendor": "cd vendor/maple2-file-io && npm install && npx tsc"
+  }
+}

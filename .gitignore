@@ -1,0 +1,5 @@
+extracted/
+node_modules/
+vendor/maple2-file-io/node_modules/
+vendor/maple2-file-io/dist/
+*.log
