@@ -41,6 +41,12 @@ export interface ItemRecord {
   category: string;
 }
 
+/** An animation clip a body or model can play, with its length in seconds (0 when unknown). */
+export interface ClipInfo {
+  name: string;
+  duration: number;
+}
+
 export interface NpcRecord {
   id: string;
   name: string;
