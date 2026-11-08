@@ -2,7 +2,7 @@
 
 > **AI disclaimer:** This project was made with the heavy assistance of AI. Review the code and behaviour before relying on it.
 
-<img width="2414" height="1837" alt="image" src="https://github.com/user-attachments/assets/7eeb2120-d1d8-4962-8da0-8e9655f4b612" />
+<img width="2429" height="1833" alt="image" src="https://github.com/user-attachments/assets/59ea5617-95fb-4974-a02e-927a86cb5987" />
 
 MS2SceneEditor is a local toolset for MapleStory 2, the Nexon game that has been discontinued. It has two parts:
 
