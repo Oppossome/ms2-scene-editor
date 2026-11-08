@@ -38,6 +38,12 @@ describe('itemTargetCharacter', () => {
     expect(itemTargetCharacter(nodes, 'hat')?.id).toBe('hero');
   });
 
+  it('walks up the tree to the nearest character', () => {
+    const deep = [...nodes, n('mount', 'prop', 'hero'), n('sub', 'group', 'mount'), n('deeper', 'item', 'sub')];
+    expect(itemTargetCharacter(deep, 'mount')?.id).toBe('hero');
+    expect(itemTargetCharacter(deep, 'deeper')?.id).toBe('hero');
+  });
+
   it('is null for anything else', () => {
     expect(itemTargetCharacter(nodes, 'g')).toBeNull();
     expect(itemTargetCharacter(nodes, 'crate')).toBeNull();

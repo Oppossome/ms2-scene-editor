@@ -29,6 +29,27 @@ import { buildMap, type BuiltMap } from '../maps/instancing.js';
 import type { ClipInfo, MapData, MapEnvironment } from '../types.js';
 import { DEFAULT_EYE, DEFAULT_SKIN, FRAME_RATE, type SceneNode } from './model.js';
 import type { LocalTransform } from './store.svelte.js';
+
+/**
+ * World-space box around the visible meshes under `roots`. Hidden subtrees (body parts replaced by
+ * clothes, unused skeleton bones) are skipped, so they don't stretch the selection outline.
+ */
+function visibleBounds(roots: Object3D[]): Box3 {
+  const bounds = new Box3();
+  const part = new Box3();
+  for (const root of roots) {
+    root.updateWorldMatrix(true, true);
+    root.traverseVisible((o) => {
+      if (!(o instanceof Mesh)) return;
+      const geometry = o.geometry;
+      geometry.computeBoundingBox();
+      if (!geometry.boundingBox) return;
+      part.copy(geometry.boundingBox).applyMatrix4(o.matrixWorld);
+      bounds.union(part);
+    });
+  }
+  return bounds;
+}
 import { descendantsOf, rootOf } from './tree.js';
 
 interface ItemLink {
@@ -565,13 +586,7 @@ export class SceneRuntime {
     }
     const node = id ? this.byId.get(id) : undefined;
     if (!id || !node || !node.visible || node.kind === 'map') return;
-    const targets = this.boundsTargets(node);
-    if (!targets.length) return;
-    const bounds = new Box3();
-    for (const t of targets) {
-      t.updateWorldMatrix(true, true);
-      bounds.expandByObject(t);
-    }
+    const bounds = visibleBounds(this.boundsTargets(node));
     if (bounds.isEmpty()) return;
     this.box.box.copy(bounds);
     this.box.visible = true;
