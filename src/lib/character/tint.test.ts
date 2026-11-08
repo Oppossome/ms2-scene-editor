@@ -1,12 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { dropSkeletonRoots, editGlbJson, safeFilename } from '../export/glb';
-import { TINT, tintPixel } from './tint';
+import { isSkinMask, TINT, tintPixel } from './tint';
 
 const white: [number, number, number] = [1, 1, 1];
 const grey: [number, number, number] = [0.3, 0.3, 0.3];
 const red: [number, number, number] = [0.8, 0.1, 0.1];
 const green: [number, number, number] = [0.1, 0.8, 0.1];
 const blue: [number, number, number] = [0.1, 0.1, 0.8];
+
+describe('isSkinMask', () => {
+  it('recognises the body masks used by the skin parts of clothes', () => {
+    expect(isSkinMask('../../../../textures/Resource/Model/Textures/item_body/m_body_c.png')).toBe(true);
+    expect(isSkinMask('../../../../textures/Resource/Model/Textures/item_body/f_skin_body_c.png')).toBe(true);
+    expect(isSkinMask('../../../textures/Resource/Model/Character/male/m_body_c.png')).toBe(true);
+    expect(isSkinMask('..\\textures\\F_SKIN_BODY_C.PNG')).toBe(true);
+    expect(isSkinMask('a/m%5Fbody_c.png')).toBe(true);
+  });
+
+  it('does not match an item\'s own mask', () => {
+    expect(isSkinMask('../../textures/item/11700001_c_studentsrunningshoes_c.png')).toBe(false);
+    expect(isSkinMask('../00200026_f_shortbodyperm_c.png')).toBe(false);
+    expect(isSkinMask('m_body_c.png.bak')).toBe(false);
+    expect(isSkinMask('')).toBe(false);
+  });
+});
 
 describe('tintPixel', () => {
   it('leaves untinted (neutral mask) pixels alone', () => {

@@ -29,6 +29,21 @@ export function paletteToTint(color: PaletteColor): TintColors {
   return { c0: argbToColor(color.ch0), c1: argbToColor(color.ch1), c2: argbToColor(color.ch2) };
 }
 
+/**
+ * Whether a colour-mask texture belongs to the body's skin (the skin parts of clothes, `CL_Skin`, `SH_Skin`...,
+ * use the body masks `m_body_c.png` / `f_skin_body_c.png`). Those regions take the character's skin colours, not
+ * the colours chosen for the item.
+ */
+export function isSkinMask(uri: string): boolean {
+  let name = uri.split(/[\\/]/).pop() ?? '';
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // keep the raw name
+  }
+  return /^(m|f)_(skin_)?body_c\.png$/i.test(name);
+}
+
 /** Constants shared by the shader and the CPU bake so both produce the same colours. */
 export const TINT = { gain: 2.2, coverageBoost: 1.8, amount: 1 };
 
@@ -65,7 +80,10 @@ export const getTintInfo = (material: Material) => tintInfo.get(material);
 export interface TintHandle {
   /** True when at least one material of the object is tintable. */
   active: boolean;
+  /** Change the item's palette colours (a no-op when the object was set up without any). */
   setColors(colors: TintColors): void;
+  /** Change the skin colours used by the object's skin regions (a no-op when it has none). */
+  setSkinColors(colors: TintColors): void;
 }
 
 const loader = new TextureLoader();
@@ -107,19 +125,42 @@ const FRAGMENT_PATCH = /* glsl */ `
 #endif
 `;
 
+interface UniformSet {
+  tint0: { value: Color };
+  tint1: { value: Color };
+  tint2: { value: Color };
+  tintGain: { value: number };
+  tintAmount: { value: number };
+}
+
+const uniformsFor = (colors: TintColors): UniformSet => ({
+  tint0: { value: colors.c0.clone() },
+  tint1: { value: colors.c1.clone() },
+  tint2: { value: colors.c2.clone() },
+  tintGain: { value: TINT.gain },
+  tintAmount: { value: TINT.amount }
+});
+
+const setUniforms = (u: UniformSet, c: TintColors) => {
+  u.tint0.value.copy(c.c0);
+  u.tint1.value.copy(c.c1);
+  u.tint2.value.copy(c.c2);
+};
+
 /**
- * Give an object's tintable materials (those listing a colour mask in extras.ms2.shader0) a per-instance clone
- * driven by one set of palette colours. Returns null when nothing is tintable.
+ * Give an object's tintable materials (those listing a colour mask in extras.ms2.shader0) a per-instance clone.
+ * Regions masked with a body mask (the skin parts of clothes) are driven by the `skin` colours, everything else by
+ * the item's `colors`; a material whose colours are missing is left as it is. Returns null when nothing is tintable.
  */
-export async function applyTint(root: Object3D, glbRel: string, colors: TintColors): Promise<TintHandle | null> {
+export async function applyTint(
+  root: Object3D,
+  glbRel: string,
+  colors: TintColors | null,
+  skin: TintColors | null = null
+): Promise<TintHandle | null> {
   const base = new URL(modelUrl(glbRel), globalThis.location?.href ?? 'http://localhost/');
-  const uniforms = {
-    tint0: { value: colors.c0.clone() },
-    tint1: { value: colors.c1.clone() },
-    tint2: { value: colors.c2.clone() },
-    tintGain: { value: TINT.gain },
-    tintAmount: { value: TINT.amount }
-  };
+  const item = colors ? uniformsFor(colors) : null;
+  const skinU = skin ? uniformsFor(skin) : null;
 
   const meshes: Mesh[] = [];
   root.traverse((o) => {
@@ -133,6 +174,8 @@ export async function applyTint(root: Object3D, glbRel: string, colors: TintColo
     if (Array.isArray(original)) continue;
     const maskUri = (original.userData as { ms2?: { shader0?: string } })?.ms2?.shader0;
     if (!maskUri || !(original instanceof MeshStandardMaterial) || !original.map) continue;
+    const uniforms = isSkinMask(maskUri) ? skinU : item;
+    if (!uniforms) continue;
 
     let clone = clones.get(original);
     if (!clone) {
@@ -165,9 +208,10 @@ export async function applyTint(root: Object3D, glbRel: string, colors: TintColo
   return {
     active,
     setColors(c: TintColors) {
-      uniforms.tint0.value.copy(c.c0);
-      uniforms.tint1.value.copy(c.c1);
-      uniforms.tint2.value.copy(c.c2);
+      if (item) setUniforms(item, c);
+    },
+    setSkinColors(c: TintColors) {
+      if (skinU) setUniforms(skinU, c);
     }
   };
 }

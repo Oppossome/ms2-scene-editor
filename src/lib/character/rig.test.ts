@@ -1,4 +1,4 @@
-import { Group, Mesh, Object3D } from 'three';
+import { Color, Group, Mesh, Object3D } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemAsset, ItemRecord } from '../types';
 import type { CharacterRig as Rig } from './rig';
@@ -32,7 +32,16 @@ vi.mock('../assets/loader.js', () => ({
   })
 }));
 
+vi.mock('./tint.js', async (original) => {
+  const actual = await original<typeof import('./tint')>();
+  return {
+    ...actual,
+    applyTint: vi.fn(async () => ({ active: true, setColors: vi.fn(), setSkinColors: vi.fn() }))
+  };
+});
+
 const { CharacterRig } = await import('./rig');
+const { applyTint } = await import('./tint');
 
 const asset = (slot: string, glb: string, over: Partial<ItemAsset> = {}): ItemAsset => ({
   slot,
@@ -119,5 +128,69 @@ describe('CharacterRig.boneTree', () => {
     const tree = rig.boneTree();
     const names = (list: typeof tree): string[] => list.flatMap((b) => [b.name, ...names(b.children)]);
     expect(names(tree)).toEqual(['Bip01', 'Bip01_Head', 'Bip01_R_Hand']);
+  });
+});
+
+describe('CharacterRig skin colours', () => {
+  const colors = (hex: number) => ({ c0: new Color(hex), c1: new Color(hex), c2: new Color(hex) });
+  const shoes = item('7', [asset('SH', 'shoes.glb', { targetnode: 'Bip01 Head' })]);
+  const calls = () => vi.mocked(applyTint).mock.calls;
+
+  it('tints the body with the skin colours for both its own and the skin regions', async () => {
+    vi.mocked(applyTint).mockClear();
+    const skin = colors(0xffccaa);
+    await CharacterRig.create(1, skin);
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0].slice(2)).toEqual([skin, skin]);
+  });
+
+  it('gives a worn item the character skin for its skin regions, even without item colours', async () => {
+    const skin = colors(0xffccaa);
+    const rig = await CharacterRig.create(1, skin);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(shoes);
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0][1]).toBe('shoes.glb');
+    expect(calls()[0].slice(2)).toEqual([null, skin]);
+  });
+
+  it('passes item colours too when the item has them', async () => {
+    const skin = colors(0xffccaa);
+    const palette = colors(0x3355ff);
+    const rig = await CharacterRig.create(1, skin);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(shoes, palette);
+    expect(calls()[0].slice(2)).toEqual([palette, skin]);
+  });
+
+  it('does not tint an item at all without skin or item colours', async () => {
+    const rig = await CharacterRig.create(1);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(shoes);
+    expect(calls()).toHaveLength(0);
+  });
+
+  it('pushes a new skin colour to the body and to every worn item', async () => {
+    const rig = await CharacterRig.create(1, colors(0xffccaa));
+    await rig.equip(shoes);
+    const handles = await Promise.all(vi.mocked(applyTint).mock.results.map((r) => r.value));
+    const bodyHandle = handles[0];
+    const itemHandle = handles[handles.length - 1];
+    vi.mocked(bodyHandle.setSkinColors).mockClear();
+    vi.mocked(itemHandle.setSkinColors).mockClear();
+    const darker = colors(0x6b4a33);
+    rig.setSkinColors(darker);
+    expect(bodyHandle.setSkinColors).toHaveBeenCalledWith(darker);
+    expect(bodyHandle.setColors).toHaveBeenCalledWith(darker);
+    expect(itemHandle.setSkinColors).toHaveBeenCalledWith(darker);
+  });
+
+  it('gives items worn after a skin change the new colour', async () => {
+    const rig = await CharacterRig.create(1, colors(0xffccaa));
+    const darker = colors(0x6b4a33);
+    rig.setSkinColors(darker);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(shoes);
+    expect(calls()[0].slice(2)).toEqual([null, darker]);
   });
 });

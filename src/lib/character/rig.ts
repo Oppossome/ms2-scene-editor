@@ -63,6 +63,8 @@ export class CharacterRig {
   private readonly tokens = new Map<string, number>();
   private disposed = false;
   private skinTint: TintHandle | null = null;
+  /** The skin colours in effect: worn items' skin regions (CL_Skin, SH_Skin...) follow them. */
+  private skinColors: TintColors | null = null;
 
   private constructor(gender: 0 | 1, body: Object3D) {
     this.gender = gender;
@@ -81,12 +83,19 @@ export class CharacterRig {
   static async create(gender: 0 | 1, skin?: TintColors): Promise<CharacterRig> {
     const { object } = await instantiate(bodyModel(gender));
     const rig = new CharacterRig(gender, object);
-    if (skin) rig.skinTint = await applyTint(object, bodyModel(gender), skin);
+    if (skin) {
+      rig.skinColors = skin;
+      // The body is all skin: its own masks and the face take the skin colours.
+      rig.skinTint = await applyTint(object, bodyModel(gender), skin, skin);
+    }
     return rig;
   }
 
   setSkinColors(colors: TintColors) {
+    this.skinColors = colors;
     this.skinTint?.setColors(colors);
+    this.skinTint?.setSkinColors(colors);
+    for (const eq of this.equipped.values()) for (const tint of eq.tints) tint.setSkinColors(colors);
   }
 
   setItemColors(itemId: string, colors: TintColors) {
@@ -159,7 +168,8 @@ export class CharacterRig {
     const loaded: Loaded[] = await Promise.all(
       glbs.map(async (glb) => {
         const model = await instantiate(glb);
-        const tint = colors ? await applyTint(model.object, glb, colors) : null;
+        // Items without palette colours still get their skin regions tinted.
+        const tint = colors || this.skinColors ? await applyTint(model.object, glb, colors ?? null, this.skinColors) : null;
         return { object: model.object, tint };
       })
     );
@@ -220,6 +230,8 @@ export class CharacterRig {
       off: 0,
       userHidden: false
     };
+    // The skin may have changed while the models were loading.
+    if (this.skinColors) for (const tint of eq.tints) tint.setSkinColors(this.skinColors);
     glbs.forEach((glb, i) => {
       const group = assets.filter((a) => a.glb === glb);
       const object = loaded[i].object;
