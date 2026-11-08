@@ -196,7 +196,8 @@ function convert(nifPath, { includeHidden = false, externalTexturesFrom = null, 
       for (let x = bone; x !== undefined && x >= 0 && !required.has(x); x = parentOf.get(x)) required.add(x);
     }
   });
-  if (skeletonOnly) h.blocks.forEach((b, i) => { if (b.type === "NiNode") required.add(i); });
+  // Skeleton files keep every node: empty dummies (Weapon_*_Point, HR, CP, ...) are attachment points for items.
+  if (skeletonOnly || required.size > 0) h.blocks.forEach((b, i) => { if (b.type === "NiNode") required.add(i); });
   const nodeMap = new Map();
   const nodeByName = new Map();
   const pendingSkins = [];
@@ -221,11 +222,16 @@ function convert(nifPath, { includeHidden = false, externalTexturesFrom = null, 
       if (alpha.flags & 1) m.alphaMode = "BLEND";
       else if (alpha.flags & 0x200) { m.alphaMode = "MASK"; m.alphaCutoff = alpha.threshold / 255; }
     }
-    const texFile = (desc) => {
+    const texPath = (desc) => {
       const src = desc && get(desc.source);
       if (!src || src.type !== "NiSourceTexture" || !src.fileName) return null;
       const file = resolveTexture(src.fileName, nifPath);
       if (!file) { stats.missingTextures.push(src.fileName); return null; }
+      return file;
+    };
+    const texFile = (desc) => {
+      const file = texPath(desc);
+      if (!file) return null;
       stats.textures++;
       return glb.addImage(file);
     };
@@ -234,6 +240,20 @@ function convert(nifPath, { includeHidden = false, externalTexturesFrom = null, 
       if (base != null) m.pbrMetallicRoughness.baseColorTexture = { index: base };
       const normal = texFile(tex.textures.normal);
       if (normal != null) m.normalTexture = { index: normal };
+      // Other Gamebryo slots have no glTF equivalent. With external textures they are listed as relative URIs in
+      // extras.ms2 so a viewer can build its own shader (the colour mask under "shader0" selects the tint channels).
+      if (glb.outDir) {
+        const ms2 = {};
+        for (const slot of ["gloss", "glow", "detail", "dark", "decal0", "decal1", "bump"]) {
+          const file = texPath(tex.textures[slot]);
+          if (file) ms2[slot] = path.relative(glb.outDir, file).split(path.sep).map(encodeURIComponent).join("/");
+        }
+        tex.shaderTextures.forEach((desc, i) => {
+          const file = texPath(desc);
+          if (file) ms2["shader" + i] = path.relative(glb.outDir, file).split(path.sep).map(encodeURIComponent).join("/");
+        });
+        if (Object.keys(ms2).length) m.extras = { ms2 };
+      }
     }
     glb.json.materials.push(m);
     const id = glb.json.materials.length - 1;

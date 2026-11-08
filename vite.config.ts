@@ -1,0 +1,14 @@
+import adapter from '@sveltejs/adapter-node';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  plugins: [sveltekit({ adapter: adapter() })],
+  ssr: {
+    // Threlte ships uncompiled Svelte components, so it must be bundled for SSR.
+    noExternal: ['@threlte/core', '@threlte/extras']
+  },
+  test: {
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts']
+  }
+});
