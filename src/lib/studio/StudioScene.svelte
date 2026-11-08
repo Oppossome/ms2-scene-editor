@@ -47,17 +47,23 @@
 />
 
 {#if target}
-  <TransformControls
-    object={target}
-    mode={store.mode}
-    translationSnap={store.snap ? 10 : undefined}
-    rotationSnap={store.snap ? Math.PI / 12 : undefined}
-    scaleSnap={store.snap ? 0.1 : undefined}
-    onmouseDown={() => {
-      studio.gizmoActive = true;
-      store.record();
-    }}
-    onmouseUp={() => setTimeout(() => (studio.gizmoActive = false), 0)}
-    onobjectChange={syncSelected}
-  />
+  <!--
+    Keyed so every target gets a fresh TransformControls. When Threlte re-attaches an existing one it ends up
+    re-running its attach effect on every drag start, which detaches the gizmo mid-drag and kills the drag.
+  -->
+  {#key target}
+    <TransformControls
+      object={target}
+      mode={store.mode}
+      translationSnap={store.snap ? 10 : undefined}
+      rotationSnap={store.snap ? Math.PI / 12 : undefined}
+      scaleSnap={store.snap ? 0.1 : undefined}
+      onmouseDown={() => {
+        studio.gizmoActive = true;
+        store.record();
+      }}
+      onmouseUp={() => setTimeout(() => (studio.gizmoActive = false), 0)}
+      onobjectChange={syncSelected}
+    />
+  {/key}
 {/if}
