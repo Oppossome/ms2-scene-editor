@@ -1,17 +1,40 @@
 <script lang="ts" generics="T extends { id: string; name: string }">
+  import { hideImage, moveRowFocus } from './listnav.js';
+
   interface Props {
     /** API endpoint returning { total, items } for ?q=&offset=&limit= */
     endpoint: string;
     placeholder?: string;
     selectedId?: string | null;
-    onpick: (record: T) => void;
+    /** Click action (an immediate pick). Ignored when `onselect` is given. */
+    onpick?: (record: T) => void;
+    /** Select mode: click and arrow keys select a row, double click and Enter activate it. */
+    onselect?: (record: T) => void;
+    onactivate?: (record: T) => void;
+    /** Thumbnail URL for a record, or an empty string for none. Failed images are hidden. */
+    thumb?: (record: T) => string;
     /** Called with the record under the mouse or keyboard focus, for live previews. */
     onpreview?: (record: T) => void;
     /** Optional extra detail line per record. */
     detail?: (record: T) => string;
   }
 
-  let { endpoint, placeholder = 'Search...', selectedId = null, onpick, onpreview, detail }: Props = $props();
+  let { endpoint, placeholder = 'Search...', selectedId = null, onpick, onselect, onactivate, thumb, onpreview, detail }: Props = $props();
+
+  function onkeydown(e: KeyboardEvent) {
+    if (!onselect) return;
+    const li = (e.target as HTMLElement).closest('li');
+    const index = li ? [...li.parentElement!.children].indexOf(li) : -1;
+    if (e.key === 'Enter' && records[index]) {
+      e.preventDefault();
+      onactivate?.(records[index]);
+      return;
+    }
+    const button = moveRowFocus(e);
+    const moved = button?.closest('li');
+    const next = moved ? records[[...moved.parentElement!.children].indexOf(moved)] : undefined;
+    if (next) onselect(next);
+  }
 
   const PAGE = 60;
   let query = $state('');
@@ -54,17 +77,24 @@
   <input type="search" bind:value={query} {placeholder} />
   <div class="count">{total.toLocaleString()} results</div>
   {#if error}<div class="error">{error}</div>{/if}
-  <ul>
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <ul {onkeydown}>
     {#each records as record (record.id)}
+      {@const src = thumb?.(record)}
       <li>
         <button
           class:selected={record.id === selectedId}
-          onclick={() => onpick(record)}
+          onclick={() => (onselect ? onselect(record) : onpick?.(record))}
+          ondblclick={() => onactivate?.(record)}
           onmouseenter={() => onpreview?.(record)}
           onfocus={() => onpreview?.(record)}
+          title={record.name}
         >
-          <span class="name">{record.name}</span>
-          <span class="detail">{detail ? detail(record) : record.id}</span>
+          {#if src}<img {src} alt="" loading="lazy" onerror={hideImage} />{/if}
+          <span class="text">
+            <span class="name">{record.name}</span>
+            <span class="detail">{detail ? detail(record) : record.id}</span>
+          </span>
         </button>
       </li>
     {/each}
@@ -111,8 +141,22 @@
     border-radius: 0;
     background: transparent;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 8px;
     padding: 5px 6px;
+  }
+  img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    background: #12131a;
+    border-radius: 4px;
+    flex: none;
+  }
+  .text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
   li button:hover,
   li button.selected {

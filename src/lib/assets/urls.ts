@@ -17,6 +17,15 @@ export const modelUrl = (rel: string) => assetUrl(`converted/models/${rel}`);
 /** URL of an item/inventory icon given the path from the index ("Resource/Image/..."). */
 export const iconUrl = (icon: string) => (icon ? assetUrl(icon) : '');
 
+/**
+ * URL of the preview PNG a model's source NIF carried in its header, extracted next to the converted models under
+ * `converted/model-previews/` with the same relative path. Not every model has one: callers must tolerate a 404.
+ */
+export function previewUrlForModel(glb: string): string {
+  const rel = glb.replace(/\\/g, '/').replace(/\.glb$/i, '');
+  return rel ? assetUrl(`converted/model-previews/${rel}.png`) : '';
+}
+
 export const bodyModel = (gender: 0 | 1) => (gender === 0 ? 'Character/male/m_body.glb' : 'Character/female/f_body.glb');
 
 /** Folder holding the per-clip skeleton-only GLBs of a body model. */

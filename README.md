@@ -2,7 +2,7 @@
 
 Two parts: tools that unpack the (discontinued) MapleStory 2 Steam install (`cmd/extract/`), and a local SvelteKit app (`src/`) that uses the result as a Roblox-style studio: a model hierarchy, a properties list, character dressing and real game maps. Personal use only; don't redistribute the assets.
 
-Node isn't installed globally on this machine, so every command runs inside `nix shell nixpkgs#nodejs --command ...`.
+Node isn't installed globally on this machine, so every command runs inside `nix shell nixpkgs#nodejs --command ...`. The repo's `shell.nix` bundles Node plus the converters the extraction scripts use (ffmpeg, vgmstream, ImageMagick), so `nix-shell` gives you all of them at once.
 
 ## The app
 
@@ -17,11 +17,9 @@ nix shell nixpkgs#nodejs --command npm run dev       # http://localhost:5173
 
 Other scripts: `npm run check` (svelte-check), `npm test` (Vitest), `npm run build` (adapter-node, then `node build`). Set `MS2_EXTRACTED` / `MS2_DATA` to move the asset or index folders.
 
-| Page | What it does |
-| --- | --- |
-| `/scene` (Studio) | One page, three areas. **Explorer** (right, top): the scene as a tree; a character owns its worn items as child nodes plus a `Skeleton` of bones. Drag to reparent or reorder, drop onto a bone to mount a node there (a sword on a hand, a prop on the head), rename (F2 / double click), hide, lock, filter, right-click menu. **Properties** (right, bottom): sections for the selected node (name, transform with scrubbable fields, gender, skin tone and item colours, animation clip and speed, attach bone, source, locked) or a selected bone. **Viewport**: click to select (Alt+click the top-level node), right-click for the menu, move/rotate/scale gizmos (G/R/S, snap). **Toolbox** (left): props, NPCs, maps, base characters and saved outfits. Also: undo/redo (Ctrl+Z/Y), duplicate (Ctrl+D), group (Ctrl+G), focus (F), autosave, JSON import/export, GLB export of the scene or of one node with its animation. |
-| `/maps` | Browse ~1,700 maps and view them drawn from the game's own xblock data (instanced: Henesys is ~4.4k props, Tria ~15k). Terrain beyond the placed props isn't available (see gaps). |
-| `/models` | Browse NPCs and map props with their animations. |
+The app is a single page, the studio, served at `/`.
+
+Four areas. **Explorer** (right, top): the scene as a tree; a character owns its worn items as child nodes plus a `Skeleton` of bones. Drag to reparent or reorder, drop onto a bone to mount a node there (a sword on a hand, a prop on the head), rename (F2 / double click), hide, lock, filter, right-click menu. **Properties** (right, bottom): sections for the selected node (name, transform with scrubbable fields, gender, skin tone and item colours, animation clip and speed, attach bone, source, locked) or a selected bone. **Viewport**: click to select (Alt+click the top-level node), right-click for the menu, move/rotate/scale gizmos (G/R/S, snap). **Toolbox** (left, `I` opens it): tabs for Props, NPCs, Maps, Characters (base bodies and saved outfits) and Items. Click or arrow to select an entry and see it in the preview pane (orbitable; NPCs and characters get an animation picker, maps load progressively with prop counts, items are worn on a mannequin); **Insert**, double click or Enter adds it under the selected node (or the scene root, switchable) and the dock stays open ("N added"). Props show the preview image embedded in their model, items show their icon; everything else is name plus preview. Items go onto the selected character, or onto a new character when none is selected. Also: undo/redo (Ctrl+Z/Y), duplicate (Ctrl+D), group (Ctrl+G), focus (F), autosave, JSON import/export, GLB export of the scene or of one node with its animation.
 
 ### How it works
 
@@ -32,7 +30,7 @@ Other scripts: `npm run check` (svelte-check), `npm test` (Vitest), `npm run bui
 - **Colours** (`tint.ts`): `_c` textures are RGB masks that select the item's three palette channels; a patched `MeshStandardMaterial` re-colours masked regions from the palette, keeping the base lightness. The exact blend is approximated by eye against the in-game icons. Export bakes it into the diffuse texture.
 - **Maps** (`src/lib/server/xblock.ts`, `src/lib/maps/`): an xblock lists entities by flat-model name with position (cm, Z-up), rotation (degrees, applied as Rz*Ry*Rx) and scale. Each is resolved to a converted model and drawn with one `InstancedMesh` per mesh part. About 98% of entities resolve; waypoints, triggers and spawners have no model.
 
-Layout: `src/lib/{assets,character,maps,scene,studio,export,stores,server,components}`, routes in `src/routes`, index builder in `scripts/`.
+Layout: `src/lib/{assets,character,maps,scene,studio,export,stores,server,components}` (the Toolbox is `studio/Toolbox.svelte`, its preview is `studio/preview.svelte.ts` + `PreviewStage.svelte`), routes in `src/routes`, index builder in `scripts/`.
 
 ### Known gaps in the app
 

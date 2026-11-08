@@ -2,11 +2,13 @@ import { getItem } from '../character/build.js';
 import { downloadBuffer, safeFilename } from '../export/glb.js';
 import { decomposeForScene, extractNearby } from '../maps/extract.js';
 import type { ViewApi } from '../components/viewapi.js';
+import { defaultInsertParent, itemTargetCharacter } from '../scene/insert.js';
 import { DEFAULT_SKIN, nodesToOutfit, type Vec3 } from '../scene/model.js';
 import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState, type NewItem } from '../scene/store.svelte.js';
 import { saveNamed, type OutfitSnapshot } from '../stores/outfits.js';
 import type { ItemRecord, MapData } from '../types.js';
+import { pathOf } from '../scene/tree.js';
 import { Vector3 } from 'three';
 
 /** What a context menu or the Add Child panel is about. */
@@ -60,10 +62,88 @@ export class Studio {
   ready = $state(false);
   /** True while the transform gizmo is being used, so a click on it does not change the selection. */
   gizmoActive = false;
+  /** Toolbox: insert at the scene root instead of under the selected node. */
+  insertAtRoot = $state(false);
+  /** Toolbox: height in pixels of the preview pane. */
+  previewHeight = $state(260);
+  /** Toolbox: current tab, kept while Add Child borrows the dock. */
+  toolboxTab = $state<'props' | 'npcs' | 'maps' | 'characters' | 'items'>('props');
+
+  /**
+   * The node the Toolbox last inserted and the parent it used. Inserting selects the new node, which would
+   * otherwise make the next insert land inside it; while that node stays selected the same parent is reused.
+   */
+  private lastInsert: { id: string; parent: string | null } | null = null;
 
   constructor() {
     this.store.hooks.localFor = (id, parentId, bone) => this.runtime.localFor(id, parentId, bone);
     this.runtime.hooks.defaultClip = (id, clip) => this.store.update(id, { clip }, false);
+  }
+
+  // ----- Toolbox inserts ---------------------------------------------------------------------------------------
+
+  /** Parent the Toolbox inserts into: the selected node if it can hold children, else the scene root. */
+  get insertParentId(): string | null {
+    if (this.insertAtRoot) return null;
+    const last = this.lastInsert;
+    if (last && this.store.selectedId === last.id) return this.store.node(last.parent) ? last.parent : null;
+    return defaultInsertParent(this.store.nodes, this.store.selectedId);
+  }
+
+  /** Where the Toolbox will insert, for display. */
+  get insertPath(): string {
+    const id = this.insertParentId;
+    return id ? pathOf(this.store.nodes, id).join(' / ') : 'Scene root';
+  }
+
+  private inserted(id: string, parent: string | null): string {
+    if (id) this.lastInsert = { id, parent };
+    return id;
+  }
+
+  insertModel(entry: ModelEntry, kind: 'prop' | 'npc'): string {
+    const parent = this.insertParentId;
+    return this.inserted(this.addModel(entry, kind, { parentId: parent ?? undefined }), parent);
+  }
+
+  insertMap(entry: { id: string; name: string }): string {
+    const parent = this.insertParentId;
+    return this.inserted(this.addMap(entry, parent ?? undefined), parent);
+  }
+
+  insertGroup(): string {
+    const parent = this.insertParentId;
+    return this.inserted(this.addGroup(parent ?? undefined), parent);
+  }
+
+  insertBaseCharacter(gender: 0 | 1): string {
+    const parent = this.insertParentId;
+    return this.inserted(this.addBaseCharacter(gender, parent ?? undefined), parent);
+  }
+
+  async insertCharacter(name: string, snapshot: OutfitSnapshot): Promise<string> {
+    const parent = this.insertParentId;
+    return this.inserted(await this.addCharacter(name, snapshot, parent ?? undefined), parent);
+  }
+
+  /** The character an item inserted from the Toolbox is worn by (null: it goes on a new character). */
+  get itemTarget() {
+    return this.insertAtRoot ? null : itemTargetCharacter(this.store.nodes, this.store.selectedId);
+  }
+
+  /** Wear an item on the targeted character, or put it on a new base character of the given gender. */
+  insertItem(item: ItemRecord, gender: 0 | 1, color?: number): string {
+    const target = this.itemTarget;
+    if (target) {
+      const parent = this.insertParentId;
+      return this.inserted(this.commitItem({ nodeId: target.id }, item, color), parent);
+    }
+    const parent = this.insertParentId;
+    const id = this.store.addCharacter(
+      { name: gender === 1 ? 'Female' : 'Male', gender, skin: DEFAULT_SKIN, parentId: parent, position: parent ? [0, 0, 0] : this.spawnPoint() },
+      [{ itemId: item.id, name: item.name, slots: item.slots, color }]
+    );
+    return this.inserted(id, parent);
   }
 
   // ----- adding ------------------------------------------------------------------------------------------------
@@ -71,7 +151,8 @@ export class Studio {
   /** New things appear on the ground where the camera looks, fanned out so they do not pile up. */
   spawnPoint(): Vec3 {
     const t = this.view.target?.();
-    const n = this.store.nodes.length;
+    // Count only top-level nodes: the contents of a group or a character do not take up room on the ground.
+    const n = this.store.nodes.filter((x) => x.parentId === null).length;
     const dx = ((n % 6) - 2.5) * 110;
     const dz = Math.floor(n / 6) * 110;
     return [round((t?.x ?? 0) + dx), 0, round((t?.z ?? 0) + dz)];

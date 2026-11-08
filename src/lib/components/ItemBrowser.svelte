@@ -1,5 +1,6 @@
 <script lang="ts">
   import { iconUrl } from '#lib/assets/urls.js';
+  import { moveRowFocus } from './listnav.js';
   import { SLOT_ORDER, slotLabel } from '#lib/character/slots.js';
   import type { Gender, ItemRecord } from '#lib/types.js';
 
@@ -7,22 +8,32 @@
     /** Gender the list is filtered for. */
     gender: Gender;
     wornIds: Set<string>;
-    onpick: (item: ItemRecord) => void;
+    /** Click action (an immediate pick). Ignored when `onselect` is given. */
+    onpick?: (item: ItemRecord) => void;
+    /** Select mode: click and arrow keys select a row, double click and Enter activate it. */
+    onselect?: (item: ItemRecord) => void;
+    onactivate?: (item: ItemRecord) => void;
+    selectedId?: string | null;
     /** Called with the item under the mouse or keyboard focus, for live previews. */
     onpreview?: (item: ItemRecord) => void;
   }
 
-  let { gender, wornIds, onpick, onpreview }: Props = $props();
+  let { gender, wornIds, onpick, onselect, onactivate, selectedId = null, onpreview }: Props = $props();
 
-  /** Arrow keys move between rows, which also previews them (focus previews like hover does). */
+  /** Arrow keys move between rows; in select mode that selects, otherwise focus previews like hover does. */
   function onkeydown(e: KeyboardEvent) {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const li = (e.target as HTMLElement).closest('li');
-    const next = e.key === 'ArrowDown' ? li?.nextElementSibling : li?.previousElementSibling;
-    const button = next?.querySelector('button');
-    if (!button) return;
-    e.preventDefault();
-    button.focus();
+    const index = li ? [...li.parentElement!.children].indexOf(li) : -1;
+    if (onselect && e.key === 'Enter' && items[index]) {
+      e.preventDefault();
+      onactivate?.(items[index]);
+      return;
+    }
+    const button = moveRowFocus(e);
+    if (!button || !onselect) return;
+    const moved = button.closest('li')!;
+    const next = items[[...moved.parentElement!.children].indexOf(moved)];
+    if (next) onselect(next);
   }
 
   const PAGE = 60;
@@ -89,7 +100,9 @@
       <li>
         <button
           class:worn={wornIds.has(item.id)}
-          onclick={() => onpick(item)}
+          class:selected={item.id === selectedId}
+          onclick={() => (onselect ? onselect(item) : onpick?.(item))}
+          ondblclick={() => onactivate?.(item)}
           onmouseenter={() => onpreview?.(item)}
           onfocus={() => onpreview?.(item)}
           title={`${item.name} (${item.id})`}
@@ -158,6 +171,11 @@
   li button.worn {
     background: #25305a;
     box-shadow: inset 3px 0 var(--accent);
+  }
+  li button.selected {
+    background: var(--panel-2);
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
   }
   img {
     width: 40px;

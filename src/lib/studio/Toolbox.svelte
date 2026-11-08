@@ -1,88 +1,272 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
+  import { previewUrlForModel } from '#lib/assets/urls.js';
   import AssetBrowser from '#lib/components/AssetBrowser.svelte';
-  import { nodesToOutfit } from '#lib/scene/model.js';
+  import ItemBrowser from '#lib/components/ItemBrowser.svelte';
   import { deleteNamed, loadSaved, type OutfitSnapshot } from '#lib/stores/outfits.js';
+  import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
+  import PaletteRow from './PaletteRow.svelte';
+  import { PreviewController, type PreviewSource } from './preview.svelte.js';
+  import PreviewStage from './PreviewStage.svelte';
+  import Splitter from './Splitter.svelte';
 
   let { studio }: { studio: Studio } = $props();
 
   const store = $derived(studio.store);
 
-  interface Entry {
+  interface ModelEntry {
     id: string;
     name: string;
     glb: string;
     scale?: number;
   }
+  interface MapEntry {
+    id: string;
+    name: string;
+  }
+  interface OutfitEntry {
+    id: string;
+    name: string;
+    saved: boolean;
+    snapshot: OutfitSnapshot;
+  }
 
-  let tab = $state<'props' | 'npcs' | 'maps' | 'characters'>('props');
-  let outfits = $state<{ name: string; snapshot: OutfitSnapshot }[]>([]);
+  type Tab = 'props' | 'npcs' | 'maps' | 'characters' | 'items';
+  const TABS: { id: Tab; label: string }[] = [
+    { id: 'props', label: 'Props' },
+    { id: 'npcs', label: 'NPCs' },
+    { id: 'maps', label: 'Maps' },
+    { id: 'characters', label: 'Characters' },
+    { id: 'items', label: 'Items' }
+  ];
 
-  function refresh() {
-    outfits = Object.entries(loadSaved(localStorage)).map(([name, snapshot]) => ({ name, snapshot }));
+  const tab = $derived(studio.toolboxTab);
+  let selected = $state.raw<ModelEntry | MapEntry | OutfitEntry | ItemRecord | null>(null);
+  let outfits = $state.raw<OutfitEntry[]>([]);
+  let itemGender = $state<0 | 1>(1);
+  let colorChoice = $state<Record<string, number>>({});
+  let added = $state(0);
+  let addedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const preview = new PreviewController();
+  onDestroy(() => {
+    clearTimeout(addedTimer);
+    preview.dispose();
+  });
+
+  function setTab(next: Tab) {
+    if (next === studio.toolboxTab) return;
+    studio.toolboxTab = next;
+    selected = null;
+    added = 0;
+  }
+
+  // ----- characters tab -----
+
+  function refreshOutfits() {
+    const base = (id: string, name: string, gender: 0 | 1): OutfitEntry => ({
+      id,
+      name,
+      saved: false,
+      snapshot: { version: 1, gender, skin: 2, items: [] }
+    });
+    outfits = [
+      base('base-1', 'Female (base)', 1),
+      base('base-0', 'Male (base)', 0),
+      ...Object.entries(loadSaved(localStorage)).map(([name, snapshot]) => ({ id: `saved:${name}`, name, saved: true, snapshot }))
+    ];
   }
 
   $effect(() => {
-    if (tab === 'characters') refresh();
+    if (tab === 'characters') untrack(refreshOutfits);
   });
 
-  const selectedCharacter = $derived(store.selected?.kind === 'character' ? store.selected : undefined);
+  function removeOutfit(entry: OutfitEntry) {
+    deleteNamed(localStorage, entry.name);
+    if (selected === entry) selected = null;
+    refreshOutfits();
+  }
+
+  // ----- items tab -----
+
+  const target = $derived(studio.itemTarget);
+  const itemTargetGender = $derived((target?.gender ?? itemGender) as 0 | 1);
+  const worn = $derived(
+    new Set(store.nodes.filter((n) => n.parentId === target?.id && n.kind === 'item' && n.itemId).map((n) => n.itemId!))
+  );
+  const item = $derived(tab === 'items' ? (selected as ItemRecord | null) : null);
+  const itemColor = $derived(item ? (colorChoice[item.id] ?? item.defaultColor) : undefined);
+
+  // ----- preview -----
+
+  const source = $derived.by<PreviewSource | null>(() => {
+    const s = selected;
+    if (!s) return null;
+    switch (tab) {
+      case 'props':
+      case 'npcs': {
+        const m = s as ModelEntry;
+        return { kind: 'model', glb: m.glb, scale: m.scale };
+      }
+      case 'maps':
+        return { kind: 'map', id: (s as MapEntry).id };
+      case 'characters': {
+        const o = (s as OutfitEntry).snapshot;
+        return { kind: 'character', gender: o.gender, skin: o.skin, items: o.items };
+      }
+      case 'items':
+        return { kind: 'item', item: s as ItemRecord, gender: itemTargetGender, color: itemColor };
+    }
+  });
+
+  $effect(() => {
+    const s = source;
+    untrack(() => void preview.show(s));
+  });
+
+  // ----- inserting -----
+
+  function noteAdded() {
+    added++;
+    clearTimeout(addedTimer);
+    addedTimer = setTimeout(() => (added = 0), 5000);
+  }
+
+  async function insert() {
+    const s = selected;
+    if (!s) return;
+    let id = '';
+    switch (tab) {
+      case 'props':
+      case 'npcs':
+        id = studio.insertModel(s as ModelEntry, tab === 'props' ? 'prop' : 'npc');
+        break;
+      case 'maps':
+        id = studio.insertMap(s as MapEntry);
+        break;
+      case 'characters': {
+        const o = s as OutfitEntry;
+        id = await studio.insertCharacter(o.saved ? o.name : o.snapshot.gender === 1 ? 'Female' : 'Male', o.snapshot);
+        break;
+      }
+      case 'items':
+        id = studio.insertItem(s as ItemRecord, itemTargetGender, itemColor);
+        break;
+    }
+    if (id) noteAdded();
+  }
+
+  function applyToTarget() {
+    const o = selected as OutfitEntry | null;
+    if (target && o) void studio.applyOutfit(target.id, o.snapshot);
+  }
+
+  const buttonLabel = $derived.by(() => {
+    if (tab !== 'items') return 'Insert';
+    if (target) return `Wear on ${target.name}`;
+    return `Insert on a new ${itemTargetGender === 1 ? 'female' : 'male'} character`;
+  });
+
+  const detail = $derived.by(() => {
+    const s = selected;
+    if (!s) return '';
+    if (tab === 'items') return (s as ItemRecord).name;
+    return (s as { name: string }).name;
+  });
+
+  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 </script>
 
 <div class="toolbox">
-  <div class="tabs">
-    <button class:active={tab === 'props'} onclick={() => (tab = 'props')}>Props</button>
-    <button class:active={tab === 'npcs'} onclick={() => (tab = 'npcs')}>NPCs</button>
-    <button class:active={tab === 'maps'} onclick={() => (tab = 'maps')}>Maps</button>
-    <button class:active={tab === 'characters'} onclick={() => (tab = 'characters')}>Characters</button>
+  <div class="into" title="New things are added here">
+    <span class="label">Insert into</span>
+    <span class="path" title={studio.insertPath}>{tab === 'items' && target ? target.name : studio.insertPath}</span>
+    <label class="root"><input type="checkbox" bind:checked={studio.insertAtRoot} /> scene root</label>
   </div>
 
-  <div class="body">
-    {#if tab === 'characters'}
-      <div class="list">
-        <div class="inline">
-          <button onclick={() => studio.addBaseCharacter(1)}>+ Female</button>
-          <button onclick={() => studio.addBaseCharacter(0)}>+ Male</button>
-          <button onclick={() => studio.addGroup()}>+ Group</button>
-        </div>
-        <p class="hint">
-          Dress a character by right-clicking it and choosing Add Child. Save what it wears from its Properties and the outfit shows up here.
-        </p>
-        <h4>Saved outfits</h4>
-        {#each outfits as outfit (outfit.name)}
-          <div class="outfit">
-            <span class="name" title={outfit.name}>{outfit.name}</span>
-            <span class="detail">{outfit.snapshot.gender === 1 ? 'Female' : 'Male'}, {outfit.snapshot.items.length} items</span>
-            <div class="inline">
-              <button onclick={() => studio.addCharacter(outfit.name, outfit.snapshot)}>New</button>
-              <button disabled={!selectedCharacter} onclick={() => selectedCharacter && studio.applyOutfit(selectedCharacter.id, outfit.snapshot)}>
-                Apply to selected
-              </button>
-              <button
-                title="Delete"
-                onclick={() => {
-                  deleteNamed(localStorage, outfit.name);
-                  refresh();
-                }}>x</button
-              >
-            </div>
-          </div>
-        {:else}
-          <p class="hint">No saved outfits yet.</p>
-        {/each}
-        {#if selectedCharacter}
-          <p class="hint">Selected: {selectedCharacter.name} ({nodesToOutfit(store.nodes, selectedCharacter.id)?.items.length ?? 0} items)</p>
-        {/if}
-      </div>
-    {:else}
+  <div class="tabs">
+    {#each TABS as t}
+      <button class:active={tab === t.id} onclick={() => setTab(t.id)}>{t.label}</button>
+    {/each}
+  </div>
+
+  <div class="list">
+    {#if tab === 'props' || tab === 'npcs' || tab === 'maps'}
       {#key tab}
         <AssetBrowser
           endpoint={`/api/${tab}`}
           placeholder={tab === 'props' ? 'Search props...' : tab === 'npcs' ? 'Search NPCs...' : 'Search maps...'}
-          onpick={(entry: Entry) => (tab === 'maps' ? studio.addMap(entry) : studio.addModel(entry, tab === 'props' ? 'prop' : 'npc'))}
+          selectedId={selected?.id ?? null}
+          onselect={(r: ModelEntry) => (selected = r)}
+          onactivate={(r: ModelEntry) => {
+            selected = r;
+            void insert();
+          }}
+          thumb={tab === 'maps' ? undefined : (r: ModelEntry) => previewUrlForModel(r.glb)}
+          detail={(r: ModelEntry & { level?: number; xblock?: string }) =>
+            tab === 'npcs' && r.level ? `Lv ${r.level} - ${r.id}` : tab === 'maps' ? `${r.id} - ${r.xblock ?? ''}` : r.id}
         />
       {/key}
+    {:else if tab === 'items'}
+      <div class="gender">
+        <button class:active={itemTargetGender === 1} disabled={!!target} onclick={() => (itemGender = 1)}>Female</button>
+        <button class:active={itemTargetGender === 0} disabled={!!target} onclick={() => (itemGender = 0)}>Male</button>
+      </div>
+      <ItemBrowser
+        gender={itemTargetGender}
+        wornIds={worn}
+        selectedId={selected?.id ?? null}
+        onselect={(r) => (selected = r)}
+        onactivate={(r) => {
+          selected = r;
+          void insert();
+        }}
+      />
+    {:else}
+      <ul class="outfits">
+        {#each outfits as outfit (outfit.id)}
+          <li>
+            <button
+              class:selected={selected === outfit}
+              onclick={() => (selected = outfit)}
+              ondblclick={() => {
+                selected = outfit;
+                void insert();
+              }}
+            >
+              <span class="name">{outfit.name}</span>
+              <span class="detail">{outfit.snapshot.gender === 1 ? 'Female' : 'Male'}, {outfit.snapshot.items.length} items</span>
+            </button>
+            {#if outfit.saved}<button class="del" title="Delete this saved outfit" onclick={() => removeOutfit(outfit)}>x</button>{/if}
+          </li>
+        {/each}
+      </ul>
+      <p class="hint">Save what a character wears from its Properties and the outfit shows up here.</p>
     {/if}
+  </div>
+
+  <Splitter axis="y" onresize={(d) => (studio.previewHeight = clamp(studio.previewHeight - d, 120, 600))} />
+
+  <div class="preview" style:height={`${studio.previewHeight}px`}>
+    <PreviewStage {preview} empty={tab === 'maps' ? 'Select a map to see it.' : 'Select something to preview it.'} />
+  </div>
+
+  {#if tab === 'items' && item?.palette}
+    <div class="colors">
+      <PaletteRow palette={item.palette} value={itemColor ?? 0} onpick={(i) => (colorChoice = { ...colorChoice, [item.id]: i })} />
+    </div>
+  {/if}
+
+  <div class="actions">
+    <div class="selection" title={detail}>{detail || 'Nothing selected'}</div>
+    <div class="buttons">
+      <button class="primary" disabled={!selected} onclick={insert}>{buttonLabel}</button>
+      {#if tab === 'characters' && target && selected}
+        <button onclick={applyToTarget} title={`Replace what ${target.name} wears`}>Apply to {target.name}</button>
+      {/if}
+    </div>
+    {#if added}<div class="added">{added} added</div>{/if}
   </div>
 </div>
 
@@ -94,46 +278,93 @@
     height: 100%;
     min-height: 0;
   }
+  .into {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .into .label {
+    color: var(--muted);
+    flex: none;
+  }
+  .into .path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .root {
+    flex: none;
+    color: var(--muted);
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+  }
   .tabs {
     display: flex;
-    gap: 4px;
+    gap: 3px;
   }
   .tabs button {
     flex: 1;
-    padding: 4px;
+    min-width: 0;
+    padding: 4px 2px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .tabs button.active {
+  button.active,
+  button.primary {
     background: var(--accent);
     border-color: var(--accent);
   }
-  .body {
-    flex: 1;
-    min-height: 0;
-  }
   .list {
+    flex: 1;
+    min-height: 80px;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    overflow-y: auto;
-    height: 100%;
   }
-  .inline {
+  .gender {
     display: flex;
     gap: 4px;
   }
-  .inline button {
+  .gender button {
     flex: 1;
+    padding: 3px;
   }
-  .outfit {
+  .outfits {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .outfits li {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .outfits li > button:first-child {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    text-align: left;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 5px 6px;
   }
-  .name {
-    font-weight: 600;
+  .outfits li > button.selected {
+    background: var(--panel-2);
+    box-shadow: inset 3px 0 var(--accent);
+  }
+  .outfits .del {
+    border: none;
+    background: transparent;
+    padding: 0 8px;
   }
   .detail,
   .hint {
@@ -141,10 +372,43 @@
     font-size: 11px;
     margin: 0;
   }
-  h4 {
-    margin: 6px 0 0;
+  .preview {
+    flex: none;
+    min-height: 0;
+  }
+  .colors {
+    flex: none;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .selection {
+    flex-basis: 100%;
+    font-size: 12px;
     color: var(--muted);
-    font-size: 11px;
-    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .buttons {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+  .buttons button {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .added {
+    font-size: 12px;
+    color: #8fd18f;
+    flex: none;
   }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { previewUrlForModel } from '#lib/assets/urls.js';
   import AssetBrowser from '#lib/components/AssetBrowser.svelte';
   import ItemBrowser from '#lib/components/ItemBrowser.svelte';
   import { loadSaved, type OutfitSnapshot } from '#lib/stores/outfits.js';
@@ -141,11 +142,11 @@
         <ItemBrowser {gender} {wornIds} onpick={pickItem} onpreview={previewItem} />
       {:else if tab === 'props'}
         {#key 'props'}
-          <AssetBrowser endpoint="/api/props" placeholder="Search props..." onpick={(e: Entry) => pickModel(e, 'prop')} onpreview={previewModel} />
+          <AssetBrowser endpoint="/api/props" placeholder="Search props..." onpick={(e: Entry) => pickModel(e, 'prop')} onpreview={previewModel} thumb={(e: Entry) => previewUrlForModel(e.glb)} />
         {/key}
       {:else if tab === 'npcs'}
         {#key 'npcs'}
-          <AssetBrowser endpoint="/api/npcs" placeholder="Search NPCs..." onpick={(e: Entry) => pickModel(e, 'npc')} onpreview={previewModel} />
+          <AssetBrowser endpoint="/api/npcs" placeholder="Search NPCs..." onpick={(e: Entry) => pickModel(e, 'npc')} onpreview={previewModel} thumb={(e: Entry) => previewUrlForModel(e.glb)} />
         {/key}
       {:else if tab === 'characters'}
         <div class="list">
