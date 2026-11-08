@@ -26,7 +26,7 @@ import { eyeTint, getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig, type BoneInfo } from '../character/rig.js';
 import { exportGlb } from '../export/glb.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
-import type { ClipInfo, MapData } from '../types.js';
+import type { ClipInfo, MapData, MapEnvironment } from '../types.js';
 import { DEFAULT_EYE, DEFAULT_SKIN, FRAME_RATE, type SceneNode } from './model.js';
 import type { LocalTransform } from './store.svelte.js';
 import { descendantsOf, rootOf } from './tree.js';
@@ -49,6 +49,8 @@ interface View {
   embedded: AnimationClip[];
   rig: CharacterRig | null;
   map: BuiltMap | null;
+  /** Backdrop and fog of a loaded map. */
+  environment: MapEnvironment | null;
   content: Object3D | null;
   /** Characters: item reconciliation state. */
   itemSig: string;
@@ -140,6 +142,17 @@ export class SceneRuntime {
     return this.views.get(characterId)?.rig ?? null;
   }
 
+  /** The backdrop and fog of the scene: those of its first visible map that sets any. */
+  mapEnvironment(): MapEnvironment | null {
+    void this.version;
+    for (const node of this.nodes) {
+      if (node.kind !== 'map' || !node.visible) continue;
+      const env = this.views.get(node.id)?.environment;
+      if (env) return env;
+    }
+    return null;
+  }
+
   isSkinned(itemNodeId: string): boolean {
     void this.version;
     const node = this.byId.get(itemNodeId);
@@ -225,6 +238,7 @@ export class SceneRuntime {
       embedded: [],
       rig: null,
       map: null,
+      environment: null,
       content: null,
       itemSig: '',
       itemColors: new Map(),
@@ -295,6 +309,7 @@ export class SceneRuntime {
     view.rig = null;
     view.map?.dispose();
     view.map = null;
+    view.environment = null;
     view.content?.removeFromParent();
     view.content = null;
     view.embedded = [];
@@ -347,6 +362,7 @@ export class SceneRuntime {
         if (!res.ok) throw new Error(`map ${node.mapId}: ${res.status}`);
         const data = (await res.json()) as MapData;
         if (gen !== view.gen) return;
+        view.environment = data.environment ?? null;
         view.map = buildMap(data, { cancelled: () => gen !== view.gen });
         view.content = view.map.group;
         view.group.add(view.map.group);

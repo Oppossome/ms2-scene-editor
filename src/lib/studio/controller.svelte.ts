@@ -8,7 +8,8 @@ import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState, type NewItem } from '../scene/store.svelte.js';
 import { saveNamed, type OutfitSnapshot } from '../stores/outfits.js';
 import type { ChannelIndexes } from '../character/tint.js';
-import type { ItemRecord, MapData } from '../types.js';
+import type { ItemRecord, MapData, MapEnvironment } from '../types.js';
+import { DEFAULT_VIEW, resolveEnvironment, type ViewSettings } from '../scene/environment.js';
 import { lastFrame, stepFrame } from '../scene/properties.js';
 import { pathOf } from '../scene/tree.js';
 import { Vector3 } from 'three';
@@ -74,6 +75,10 @@ export class Studio {
   previewHeight = $state(260);
   /** The ground grid of the main viewport. */
   showGrid = $state(true);
+  /** Backdrop and fog of the main viewport (View menu). */
+  look = $state<ViewSettings>({ ...DEFAULT_VIEW });
+  /** The backdrop picker is open. */
+  pickingBackdrop = $state(false);
   /** Toolbox (the left dock): shown or hidden. */
   toolboxOpen = $state(true);
   /** Bumped to ask the Toolbox to put the cursor in its search box. */
@@ -338,6 +343,11 @@ export class Studio {
 
   async importJson(file: File) {
     this.message = this.store.loadJson(await file.text()) ? '' : 'That file is not a valid scene.';
+  }
+
+  /** What the main viewport draws behind and around the scene: the View settings applied to the scene's map. */
+  get environment(): MapEnvironment {
+    return resolveEnvironment(this.look, this.runtime.mapEnvironment());
   }
 
   // ----- animation frame ------------------------------------------------------------------------------------------

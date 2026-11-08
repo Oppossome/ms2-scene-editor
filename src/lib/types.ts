@@ -71,6 +71,14 @@ export interface MapRecord {
   xblock: string;
 }
 
+/** What a map sets for its surroundings: a painted backdrop image and distance fog. */
+export interface MapEnvironment {
+  /** Backdrop image, a path under `converted/textures` (e.g. "Resource/Image/bg/bg_tria.png"). */
+  background?: string;
+  /** Linear fog in world units, measured from the camera. */
+  fog?: { color: [number, number, number]; near: number; far: number };
+}
+
 /** A map's props: placements are [modelIndex, x, y, z, rotX, rotY, rotZ, scaleX, scaleY, scaleZ] (Z-up, cm, degrees). */
 export interface MapData {
   id: string;
@@ -81,6 +89,8 @@ export interface MapData {
   /** Entities in the xblock vs how many were placeable. */
   total: number;
   unresolved: number;
+  /** Backdrop and fog; absent for maps that set neither. */
+  environment?: MapEnvironment;
 }
 
 export interface PaletteColor {

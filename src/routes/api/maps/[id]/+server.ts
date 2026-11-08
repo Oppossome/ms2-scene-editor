@@ -3,6 +3,7 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { EXTRACTED_ROOT, resolveAssetPath } from '#lib/server/assets.js';
 import { getFlats, getLlids, getMaps } from '#lib/server/index-data.js';
+import { loadEnvironment } from '#lib/server/environment.js';
 import { parseXblock } from '#lib/server/xblock.js';
 import type { MapData } from '#lib/types.js';
 
@@ -28,6 +29,8 @@ export const GET: RequestHandler = ({ params }) => {
     total: parsed.total,
     unresolved: Object.values(parsed.unresolved).reduce((a, b) => a + b, 0)
   };
+  const environment = loadEnvironment(record.xblock);
+  if (environment) data.environment = environment;
   cache.set(record.id, data);
   return json(data);
 };

@@ -63,7 +63,7 @@ describe('storage helpers', () => {
     expect(Object.keys(loadSaved(s))).toEqual(['beach', 'winter']);
     deleteNamed(s, 'beach');
     expect(Object.keys(loadSaved(s))).toEqual(['winter']);
-    s.setItem('bs2.outfit.saved', '{"bad": {"version": 9}, "ok": ' + JSON.stringify(snap) + '}');
+    s.setItem('ms2se.outfit.saved', '{"bad": {"version": 9}, "ok": ' + JSON.stringify(snap) + '}');
     expect(Object.keys(loadSaved(s))).toEqual(['ok']);
   });
 });

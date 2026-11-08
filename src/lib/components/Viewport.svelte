@@ -3,6 +3,8 @@
   import type { Object3D } from 'three';
   import type { Snippet } from 'svelte';
   import Stage from './Stage.svelte';
+  import { assetUrl } from '../assets/urls.js';
+  import type { FogSpec } from './fog.js';
   import type { ViewApi } from './viewapi.js';
 
   interface Props {
@@ -14,6 +16,10 @@
     interactive?: boolean;
     onGroundClick?: () => void;
     viewApi?: ViewApi;
+    /** Painted backdrop behind the scene, a path under `converted/textures`. */
+    background?: string;
+    /** Distance fog, measured for the game camera (see `fogRange`). */
+    fog?: FogSpec | null;
     children?: Snippet;
   }
 
@@ -26,13 +32,15 @@
     interactive = false,
     onGroundClick,
     viewApi,
+    background,
+    fog = null,
     children
   }: Props = $props();
 </script>
 
-<div class="viewport">
+<div class="viewport" class:backdrop={!!background} style:background-image={background ? `url("${assetUrl(`converted/textures/${background}`)}")` : undefined}>
   <Canvas>
-    <Stage {object} {frameToken} {grid} {gridSize} {onTick} {interactive} {onGroundClick} {viewApi}>
+    <Stage {object} {frameToken} {grid} {gridSize} {onTick} {interactive} {onGroundClick} {viewApi} {fog}>
       {@render children?.()}
     </Stage>
   </Canvas>
@@ -43,5 +51,9 @@
     width: 100%;
     height: 100%;
     background: radial-gradient(circle at 50% 30%, #3a3f55, #1b1d26);
+  }
+  .viewport.backdrop {
+    background-size: cover;
+    background-position: center;
   }
 </style>

@@ -12,6 +12,8 @@
     frameToken={preview.frameToken}
     grid={!preview.isMap}
     gridSize={preview.isMap ? 4000 : 400}
+    background={preview.environment?.background}
+    fog={preview.environment?.fog}
     onTick={(d) => preview.update(d)}
   >
     {#if preview.object}<T is={preview.object} />{/if}

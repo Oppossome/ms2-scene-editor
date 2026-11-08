@@ -50,7 +50,7 @@ export interface SceneData {
   nodes: SceneNode[];
 }
 
-export const SCENE_KEY = 'bs2.scene.current';
+export const SCENE_KEY = 'ms2se.scene.current';
 /** Frames per second the clips are sampled at, so a frame number maps to a time. */
 export const FRAME_RATE = 30;
 export const DEFAULT_SKIN = 2;

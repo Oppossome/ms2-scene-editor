@@ -12,7 +12,7 @@ export interface OutfitSnapshot {
   items: { id: string; color?: number; channels?: ChannelIndexes }[];
 }
 
-export const SAVED_KEY = 'bs2.outfit.saved';
+export const SAVED_KEY = 'ms2se.outfit.saved';
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 

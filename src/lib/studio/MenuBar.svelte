@@ -45,7 +45,7 @@
 </script>
 
 <div class="topbar">
-  <span class="brand">BannedStory2</span>
+  <span class="brand">MS2SceneEditor</span>
   <!-- Stop the pointerdown so the open menu's outside-click handler does not close it before the click toggles it. -->
   <button
     class="tab"

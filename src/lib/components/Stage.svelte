@@ -3,7 +3,9 @@
   import { interactivity, OrbitControls } from '@threlte/extras';
   import type { ViewApi } from './viewapi.js';
   import { untrack } from 'svelte';
-  import { Box3, Vector3, type Object3D, type PerspectiveCamera } from 'three';
+  import { Box3, Vector3, type Fog, type Object3D, type PerspectiveCamera } from 'three';
+  import { fogRange } from '../scene/environment.js';
+  import { fogColor, type FogSpec } from './fog.js';
   import type { OrbitControls as OrbitControlsType } from 'three/addons/controls/OrbitControls.js';
   import type { Snippet } from 'svelte';
 
@@ -19,6 +21,8 @@
     /** Called when the empty ground is clicked. */
     onGroundClick?: () => void;
     viewApi?: ViewApi;
+    /** Distance fog, measured for the game camera. */
+    fog?: FogSpec | null;
     children?: Snippet;
   }
 
@@ -31,6 +35,7 @@
     interactive = false,
     onGroundClick,
     viewApi,
+    fog = null,
     children
   }: Props = $props();
 
@@ -65,7 +70,17 @@
     }
   });
 
-  useTask((delta) => onTick?.(delta));
+  let fogRef = $state<Fog>();
+
+  // The fog distances are measured for the game camera, so they follow how far the view is from its target.
+  useTask((delta) => {
+    onTick?.(delta);
+    if (fog && fogRef && camera && controls) {
+      const range = fogRange(fog, camera.position.distanceTo(controls.target));
+      fogRef.near = range.near;
+      fogRef.far = range.far;
+    }
+  });
 </script>
 
 <T.PerspectiveCamera makeDefault position={[150, 120, 350]} fov={40} near={1} far={200000} bind:ref={camera}>
@@ -75,6 +90,10 @@
 <T.AmbientLight intensity={1.4} />
 <T.HemisphereLight args={[0xffffff, 0x555566, 1.0]} />
 <T.DirectionalLight position={[300, 700, 500]} intensity={2.4} />
+
+{#if fog}
+  <T.Fog attach="fog" args={[fogColor(fog.color), fog.near, fog.far]} bind:ref={fogRef} />
+{/if}
 
 {#if grid}
   <T.GridHelper args={[gridSize, gridSize / 50, 0x555a70, 0x2c2f3d]} />

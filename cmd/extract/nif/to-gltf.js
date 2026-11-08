@@ -56,7 +56,7 @@ const COMPONENT = { u8: [5121, 1], u16: [5123, 2], u32: [5125, 4], f32: [5126, 4
 class GlbBuilder {
   constructor(outDir) {
     this.outDir = outDir; // when set, images are referenced by relative URI instead of embedded
-    this.json = { asset: { version: "2.0", generator: "BannedStory2 nif->glTF" }, scene: 0, scenes: [{ nodes: [] }], nodes: [], meshes: [], materials: [], textures: [], images: [], samplers: [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }], accessors: [], bufferViews: [], buffers: [{ byteLength: 0 }] };
+    this.json = { asset: { version: "2.0", generator: "MS2SceneEditor nif->glTF" }, scene: 0, scenes: [{ nodes: [] }], nodes: [], meshes: [], materials: [], textures: [], images: [], samplers: [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }], accessors: [], bufferViews: [], buffers: [{ byteLength: 0 }] };
     this.chunks = [];
     this.length = 0;
     this.imageCache = new Map();

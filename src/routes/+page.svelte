@@ -5,7 +5,9 @@
   import ContextMenu from '#lib/studio/ContextMenu.svelte';
   import { Studio } from '#lib/studio/controller.svelte.js';
   import Explorer from '#lib/studio/Explorer.svelte';
+  import BackgroundPicker from '#lib/studio/BackgroundPicker.svelte';
   import MenuBar from '#lib/studio/MenuBar.svelte';
+  import { parseView } from '#lib/scene/environment.js';
   import Properties from '#lib/studio/Properties.svelte';
   import Splitter from '#lib/studio/Splitter.svelte';
   import StudioScene from '#lib/studio/StudioScene.svelte';
@@ -15,7 +17,7 @@
   const store = studio.store;
   const runtime = studio.runtime;
 
-  const LAYOUT_KEY = 'bs2.studio.layout';
+  const LAYOUT_KEY = 'ms2se.studio.layout';
   let leftWidth = $state(340);
   let rightWidth = $state(320);
   let explorerHeight = $state(280);
@@ -29,6 +31,7 @@
       const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}');
       if (typeof saved.leftOpen === 'boolean') studio.toolboxOpen = saved.leftOpen;
       if (typeof saved.showGrid === 'boolean') studio.showGrid = saved.showGrid;
+      studio.look = parseView(saved.look);
       if (typeof saved.leftWidth === 'number') leftWidth = clamp(saved.leftWidth, 200, 600);
       if (typeof saved.rightWidth === 'number') rightWidth = clamp(saved.rightWidth, 220, 600);
       if (typeof saved.explorerHeight === 'number') explorerHeight = clamp(saved.explorerHeight, 100, 900);
@@ -45,7 +48,7 @@
 
   $effect(() => {
     if (!ready) return;
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen: studio.toolboxOpen, showGrid: studio.showGrid, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen: studio.toolboxOpen, showGrid: studio.showGrid, look: studio.look, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
   });
 
   // Autosave on every change once the stored scene has been loaded.
@@ -138,7 +141,7 @@
       </div>
 
       <div class="viewport">
-        <Viewport viewApi={studio.view} grid={studio.showGrid} gridSize={4000} onTick={(d) => runtime.update(d)}>
+        <Viewport viewApi={studio.view} grid={studio.showGrid} gridSize={4000} background={studio.environment.background} fog={studio.environment.fog} onTick={(d) => runtime.update(d)}>
           <StudioScene {studio} />
         </Viewport>
       </div>
@@ -166,6 +169,10 @@
     </aside>
   </div>
 </div>
+
+{#if studio.pickingBackdrop}
+  <BackgroundPicker {studio} />
+{/if}
 
 {#if studio.menu}
   {#key studio.menu}

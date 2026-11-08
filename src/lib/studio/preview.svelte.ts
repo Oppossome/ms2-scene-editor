@@ -8,7 +8,7 @@ import { CharacterRig } from '../character/rig.js';
 import type { ChannelIndexes } from '../character/tint.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
 import { DEFAULT_EYE, DEFAULT_SKIN } from '../scene/model.js';
-import type { ClipInfo, ItemRecord, MapData } from '../types.js';
+import type { ClipInfo, ItemRecord, MapData, MapEnvironment } from '../types.js';
 
 /** An item to wear in a preview: its palette row and optional per-channel picks. */
 export interface PreviewItem {
@@ -47,6 +47,8 @@ export class PreviewController {
   facts = $state('');
   /** Whether the thing is a map (no ground grid, bigger scale). */
   isMap = $state(false);
+  /** Backdrop and fog of a previewed map. */
+  environment = $state.raw<MapEnvironment | null>(null);
 
   clips = $state.raw<ClipInfo[]>([]);
   clip = $state('');
@@ -112,6 +114,7 @@ export class PreviewController {
     this.facts =
       `${data.items.length.toLocaleString()} props, ${data.models.length.toLocaleString()} models` +
       (data.unresolved ? `, ${data.unresolved.toLocaleString()} entities without a model` : '');
+    this.environment = data.environment ?? null;
     this.progress = { loaded: 0, total: data.models.length };
     let failed = 0;
     const built = buildMap(data, {
@@ -253,6 +256,7 @@ export class PreviewController {
     this.progress = null;
     this.facts = '';
     this.isMap = false;
+    this.environment = null;
     this.clips = [];
     this.clip = '';
     this.playing = false;
