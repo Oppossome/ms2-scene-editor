@@ -3,6 +3,8 @@
 
   let { studio }: { studio: Studio } = $props();
 
+  const REPO_URL = 'https://github.com/Oppossome/ms2-scene-editor';
+
   function close() {
     studio.showAbout = false;
   }
@@ -27,6 +29,9 @@
         mistakes, and check anything that matters.
       </p>
       <p>This is an unofficial fan project. It is not affiliated with or endorsed by Nexon.</p>
+      <p>
+        Source code: <a href={REPO_URL} target="_blank" rel="noopener noreferrer">github.com/Oppossome/ms2-scene-editor</a>
+      </p>
     </div>
     <footer><button onclick={close}>Close</button></footer>
   </div>
@@ -74,6 +79,9 @@
     border-left: 3px solid var(--accent);
     background: var(--panel-2);
     border-radius: 0 4px 4px 0;
+  }
+  .body a {
+    color: var(--accent);
   }
   footer {
     display: flex;
