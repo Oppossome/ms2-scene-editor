@@ -18,7 +18,7 @@ export const SLOT_LABELS: Record<string, string> = {
   OH: 'Both hands'
 };
 
-/** Display order of the dresser slots. */
+/** Display order of the item slots. */
 export const SLOT_ORDER = ['HR', 'FA', 'FH', 'EY', 'EA', 'CP', 'CL', 'PA', 'GL', 'SH', 'MT', 'BE', 'RH', 'LH', 'OH'];
 
 export const slotLabel = (slot: string) => SLOT_LABELS[slot] ?? slot;

@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   deleteNamed,
-  loadCurrent,
   loadSaved,
   parseSnapshot,
   parseSnapshotJson,
-  saveCurrent,
   saveNamed,
   type OutfitSnapshot
 } from './outfits';
@@ -43,13 +41,6 @@ describe('parseSnapshot', () => {
 });
 
 describe('storage helpers', () => {
-  it('round-trips the current outfit', () => {
-    const s = new MemoryStorage();
-    expect(loadCurrent(s)).toBeNull();
-    saveCurrent(s, snap);
-    expect(loadCurrent(s)).toEqual(snap);
-  });
-
   it('saves, lists and deletes named outfits, ignoring corrupt entries', () => {
     const s = new MemoryStorage();
     saveNamed(s, 'beach', snap);

@@ -1,103 +1,144 @@
 import { describe, expect, it } from 'vitest';
-import { History, newId, parseScene, parseSceneJson } from './model';
+import { History, nodesToOutfit, parseScene, parseSceneJson, type SceneNode } from './model';
 
-const prop = {
-  id: 'a',
-  kind: 'prop',
-  name: 'Crate',
-  glb: 'Map/x.glb',
-  position: [1, 2, 3],
-  rotation: [0, 0, 0],
-  scale: [1, 1, 1],
-  visible: true
-};
-const character = {
-  id: 'b',
-  kind: 'character',
-  name: 'Hero',
-  outfit: { version: 1, gender: 1, skin: 2, items: [{ id: '11400604' }] },
-  clip: 'idle_a',
-  position: [0, 0, 0],
-  rotation: [0, 1, 0],
-  scale: [1, 1, 1],
-  visible: false
-};
+const base = { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], visible: true };
+const node = (o: Record<string, unknown>) => ({ ...base, name: 'n', ...o });
+
+const hero = node({ id: 'hero', kind: 'character', gender: 1, skin: 3 });
+const hat = node({ id: 'hat', kind: 'item', parentId: 'hero', itemId: '11400604', slots: ['CP'], color: 2 });
+const crate = node({ id: 'crate', kind: 'prop', glb: 'Map/x.glb' });
 
 describe('parseScene', () => {
-  it('accepts valid props and characters', () => {
-    const scene = parseScene({ version: 1, objects: [prop, character] });
-    expect(scene?.objects).toHaveLength(2);
-    expect(scene?.objects[1].visible).toBe(false);
-    expect(scene?.objects[1].clip).toBe('idle_a');
+  it('accepts a tree with items under a character', () => {
+    const scene = parseScene({ version: 1, nodes: [hero, hat, crate] });
+    expect(scene?.nodes.map((n) => n.id)).toEqual(['hero', 'hat', 'crate']);
+    expect(scene?.nodes[1]).toMatchObject({ parentId: 'hero', itemId: '11400604', color: 2, slots: ['CP'] });
+    expect(scene?.nodes[0]).toMatchObject({ gender: 1, skin: 3, locked: false });
   });
 
-  it('drops malformed objects but keeps valid ones', () => {
+  it('rejects a wrong envelope and the old flat format', () => {
+    expect(parseScene(null)).toBeNull();
+    expect(parseScene({ version: 2, nodes: [] })).toBeNull();
+    expect(parseScene({ version: 1, objects: [crate] })).toBeNull();
+  });
+
+  it('drops invalid nodes', () => {
     const scene = parseScene({
       version: 1,
-      objects: [prop, { ...prop, id: 'x', position: [1, 2] }, { ...prop, id: 'y', glb: '' }, { ...character, outfit: { version: 5 } }, 'nope']
+      nodes: [
+        crate,
+        node({ id: 'a', kind: 'prop' }), // no model
+        node({ id: 'b', kind: 'wat', glb: 'x' }),
+        node({ id: 'c', kind: 'map', mapId: 'abc' }),
+        node({ id: 'd', kind: 'character', gender: 5 }),
+        { ...crate, id: 'e', position: [1, 2] }
+      ]
     });
-    expect(scene?.objects.map((o) => o.id)).toEqual(['a']);
+    expect(scene?.nodes.map((n) => n.id)).toEqual(['crate']);
   });
 
-  it('regenerates missing or duplicate ids', () => {
-    const scene = parseScene({ version: 1, objects: [prop, { ...prop }, { ...prop, id: undefined }] });
-    const ids = scene!.objects.map((o) => o.id);
-    expect(new Set(ids).size).toBe(3);
+  it('repairs parent links', () => {
+    const scene = parseScene({
+      version: 1,
+      nodes: [
+        node({ id: 'a', kind: 'group', parentId: 'missing' }),
+        node({ id: 'b', kind: 'group', parentId: 'c' }),
+        node({ id: 'c', kind: 'group', parentId: 'b' }),
+        node({ id: 'd', kind: 'group', parentId: 'crate' }), // crate is a prop: props may hold children
+        crate
+      ]
+    });
+    const byId = new Map(scene!.nodes.map((n) => [n.id, n]));
+    expect(byId.get('a')?.parentId).toBeNull();
+    // a cycle is cut somewhere, so walking up always terminates at the root
+    for (const id of ['b', 'c']) {
+      let cur = byId.get(id);
+      for (let i = 0; i < 5 && cur?.parentId; i++) cur = byId.get(cur.parentId);
+      expect(cur?.parentId).toBeNull();
+    }
+    expect(byId.get('d')?.parentId).toBe('crate');
   });
 
-  it('rejects a wrong envelope or invalid json', () => {
-    expect(parseScene({ version: 2, objects: [] })).toBeNull();
-    expect(parseScene({ version: 1 })).toBeNull();
-    expect(parseSceneJson('{oops')).toBeNull();
+  it('drops items that are not on a character and moves children off items', () => {
+    const scene = parseScene({
+      version: 1,
+      nodes: [
+        hero,
+        hat,
+        node({ id: 'loose', kind: 'item', itemId: '1', slots: [] }),
+        node({ id: 'onprop', kind: 'item', parentId: 'crate', itemId: '2', slots: [] }),
+        crate,
+        node({ id: 'child', kind: 'prop', glb: 'a.glb', parentId: 'hat', attachBone: 'Bip01' })
+      ]
+    });
+    expect(scene?.nodes.map((n) => n.id).sort()).toEqual(['child', 'crate', 'hat', 'hero']);
+    const child = scene!.nodes.find((n) => n.id === 'child')!;
+    expect(child.parentId).toBeNull();
+    expect(child.attachBone).toBeUndefined();
+  });
+
+  it('keeps attachBone only on children of characters', () => {
+    const scene = parseScene({
+      version: 1,
+      nodes: [hero, node({ id: 'sword', kind: 'prop', glb: 's.glb', parentId: 'hero', attachBone: 'Bip01 R Hand' }), crate, node({ id: 'x', kind: 'prop', glb: 'q.glb', parentId: 'crate', attachBone: 'B' })]
+    });
+    expect(scene!.nodes.find((n) => n.id === 'sword')?.attachBone).toBe('Bip01 R Hand');
+    expect(scene!.nodes.find((n) => n.id === 'x')?.attachBone).toBeUndefined();
+  });
+
+  it('renames duplicate ids', () => {
+    const scene = parseScene({ version: 1, nodes: [crate, { ...crate }] });
+    expect(new Set(scene!.nodes.map((n) => n.id)).size).toBe(2);
+  });
+
+  it('parseSceneJson handles bad JSON', () => {
+    expect(parseSceneJson('{nope')).toBeNull();
+    expect(parseSceneJson(JSON.stringify({ version: 1, nodes: [crate] }))?.nodes).toHaveLength(1);
   });
 });
 
-describe('map objects', () => {
-  it('need a numeric map id', () => {
-    const map = { id: 'm', kind: 'map', name: 'Henesys', mapId: '02000076', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], visible: true };
-    expect(parseScene({ version: 1, objects: [map] })?.objects[0].mapId).toBe('02000076');
-    expect(parseScene({ version: 1, objects: [{ ...map, mapId: '../x' }] })?.objects).toEqual([]);
-    expect(parseScene({ version: 1, objects: [{ ...map, mapId: undefined }] })?.objects).toEqual([]);
+describe('nodesToOutfit', () => {
+  it('lists the item children of a character in order', () => {
+    const scene = parseScene({
+      version: 1,
+      nodes: [hero, hat, node({ id: 'top', kind: 'item', parentId: 'hero', itemId: '5', slots: ['CL'] }), crate]
+    })!;
+    expect(nodesToOutfit(scene.nodes, 'hero')).toEqual({
+      version: 1,
+      gender: 1,
+      skin: 3,
+      items: [{ id: '11400604', color: 2 }, { id: '5' }]
+    });
   });
-});
 
-describe('newId', () => {
-  it('produces unique ids', () => {
-    expect(new Set(Array.from({ length: 200 }, () => newId())).size).toBe(200);
+  it('is null for non-characters', () => {
+    const nodes = parseScene({ version: 1, nodes: [crate] })!.nodes as SceneNode[];
+    expect(nodesToOutfit(nodes, 'crate')).toBeNull();
+    expect(nodesToOutfit(nodes, 'nope')).toBeNull();
   });
 });
 
 describe('History', () => {
-  it('undoes and redoes in order', () => {
-    const h = new History();
-    h.record('s0');
-    h.record('s1');
-    expect(h.undo('s2')).toBe('s1');
-    expect(h.undo('s1')).toBe('s0');
-    expect(h.undo('s0')).toBeNull();
-    expect(h.redo('s0')).toBe('s1');
-    expect(h.redo('s1')).toBe('s2');
-    expect(h.redo('s2')).toBeNull();
-  });
-
-  it('clears redo on a new record and ignores duplicate consecutive states', () => {
+  it('undoes and redoes', () => {
     const h = new History();
     h.record('a');
-    h.record('a');
+    h.record('b');
+    expect(h.undo('c')).toBe('b');
     expect(h.undo('b')).toBe('a');
-    expect(h.canUndo).toBe(false);
+    expect(h.undo('a')).toBeNull();
+    expect(h.redo('a')).toBe('b');
     expect(h.canRedo).toBe(true);
-    h.record('c');
-    expect(h.canRedo).toBe(false);
   });
 
-  it('caps its size', () => {
+  it('drops redo on a new record and honours the limit', () => {
     const h = new History(2);
-    h.record('1');
-    h.record('2');
-    h.record('3');
-    expect(h.undo('4')).toBe('3');
-    expect(h.undo('3')).toBe('2');
-    expect(h.undo('2')).toBeNull();
+    h.record('a');
+    h.record('b');
+    h.record('c');
+    expect(h.undo('d')).toBe('c');
+    expect(h.undo('c')).toBe('b');
+    expect(h.undo('b')).toBeNull();
+    h.record('x');
+    expect(h.canRedo).toBe(false);
   });
 });

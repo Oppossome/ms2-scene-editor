@@ -1,0 +1,276 @@
+<script lang="ts">
+  import { getItem } from '#lib/character/build.js';
+  import { ONE, ZERO, type Vec3 } from '#lib/scene/model.js';
+  import { applyChange, describeBone, describeNode, type PropRow } from '#lib/scene/properties.js';
+  import { pathOf } from '#lib/scene/tree.js';
+  import type { ItemRecord } from '#lib/types.js';
+  import type { Studio } from './controller.svelte.js';
+  import NumberField from './NumberField.svelte';
+  import PaletteRow from './PaletteRow.svelte';
+
+  let { studio }: { studio: Studio } = $props();
+
+  const store = $derived(studio.store);
+  const runtime = $derived(studio.runtime);
+
+  const selected = $derived(store.selected);
+  const bone = $derived(store.selectedBone);
+
+  let itemRecord = $state.raw<ItemRecord | null>(null);
+  $effect(() => {
+    const id = selected?.kind === 'item' ? selected.itemId : undefined;
+    itemRecord = null;
+    if (id) void getItem(id).then((r) => (itemRecord = store.selected?.itemId === id ? r : null));
+  });
+
+  const sections = $derived.by(() => {
+    if (bone) {
+      const character = store.node(bone.characterId);
+      const info = findBone(runtime.boneTree(bone.characterId), bone.bone);
+      return describeBone(character?.name ?? '', bone.bone, info?.children.length ?? 0);
+    }
+    const node = selected;
+    if (!node) return [];
+    const parent = store.node(node.parentId);
+    return describeNode({
+      node,
+      parent,
+      path: pathOf(store.nodes, node.id),
+      clips: runtime.clipsOf(node.id),
+      bones: parent?.kind === 'character' ? runtime.boneNames(parent.id) : [],
+      defaultBone: runtime.defaultBoneOf(node.id),
+      skinned: node.kind === 'item' && runtime.isSkinned(node.id),
+      palette: itemRecord?.palette ?? 0
+    });
+  });
+
+  function findBone(list: ReturnType<typeof runtime.boneTree>, name: string): ReturnType<typeof runtime.boneTree>[number] | undefined {
+    for (const b of list) {
+      if (b.name === name) return b;
+      const hit = findBone(b.children, name);
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+
+  function edit(key: string, value: unknown) {
+    const node = selected;
+    const patch = node ? applyChange(key, value) : null;
+    if (node && patch) store.update(node.id, patch);
+  }
+
+  /** Axis edits are continuous (typing or scrubbing): the first one records an undo step. */
+  function setAxis(row: PropRow, axis: number, v: number) {
+    const node = selected;
+    if (!node) return;
+    const next = [...(row.value as Vec3)] as Vec3;
+    next[axis] = v;
+    const patch = applyChange(row.key, next);
+    if (patch) store.update(node.id, patch, false);
+  }
+
+  function resetOffset() {
+    if (selected) store.update(selected.id, { position: [...ZERO] as Vec3, rotation: [...ZERO] as Vec3, scale: [...ONE] as Vec3 });
+  }
+
+  let radius = $state(1500);
+  let outfitName = $state('');
+  let saved = $state('');
+
+  function saveOutfit() {
+    if (!selected) return;
+    saved = studio.saveOutfit(selected.id, outfitName) ? `Saved "${outfitName.trim()}".` : '';
+    if (saved) outfitName = '';
+  }
+</script>
+
+<div class="props">
+  {#if !selected && !bone}
+    <p class="empty">Select something in the Explorer or the viewport to see its properties.</p>
+  {:else}
+    {#each sections as section (section.section)}
+      <details open>
+        <summary>{section.section}</summary>
+        {#each section.rows as row (row.key)}
+          <div class="row" class:wide={row.type === 'palette'}>
+            <span class="label" title={row.disabled ?? row.label}>{row.label}</span>
+            <div class="value">
+              {#if row.type === 'string'}
+                <input value={row.value as string} onchange={(e) => edit(row.key, e.currentTarget.value)} />
+              {:else if row.type === 'number'}
+                <NumberField
+                  value={row.value as number}
+                  step={row.step}
+                  min={row.min}
+                  onstart={() => store.record()}
+                  onchange={(v) => edit(row.key, v) /* recorded by update */}
+                />
+              {:else if row.type === 'vec3'}
+                <div class="vec" title={row.disabled}>
+                  {#each ['X', 'Y', 'Z'] as axis, i}
+                    <NumberField
+                      label={axis}
+                      value={(row.value as Vec3)[i]}
+                      step={row.step}
+                      disabled={!!row.disabled}
+                      onstart={() => store.record()}
+                      onchange={(v) => setAxis(row, i, v)}
+                    />
+                  {/each}
+                </div>
+              {:else if row.type === 'bool'}
+                <input type="checkbox" checked={row.value as boolean} onchange={(e) => edit(row.key, e.currentTarget.checked)} />
+              {:else if row.type === 'enum'}
+                <select value={row.value as string} onchange={(e) => edit(row.key, e.currentTarget.value)}>
+                  {#each row.options ?? [] as option}
+                    <option value={option.value}>{option.label}</option>
+                  {/each}
+                </select>
+              {:else if row.type === 'palette'}
+                <PaletteRow palette={row.palette ?? 0} value={row.value as number} onpick={(i) => edit(row.key, i)} />
+              {:else if row.type === 'action'}
+                <button onclick={resetOffset}>{row.value}</button>
+              {:else}
+                <span class="readonly" title={String(row.value)}>{row.value}</span>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </details>
+    {/each}
+
+    <details open>
+      <summary>Actions</summary>
+      <div class="actions">
+        {#if selected}
+          {@const node = selected}
+          <button onclick={() => studio.focus(node.id)}>Focus</button>
+          {#if node.kind !== 'item'}
+            <button onclick={() => studio.openAddChild(node.id)}>Add child...</button>
+            <button onclick={() => store.duplicate(node.id)}>Duplicate</button>
+            <button onclick={() => store.group(node.id)}>Group</button>
+          {/if}
+          {#if node.kind !== 'item' && node.kind !== 'map'}
+            <button onclick={() => studio.exportGlb(node.id)} disabled={studio.busy === 'export'}>Export GLB</button>
+          {/if}
+          <button class="danger" onclick={() => store.remove(node.id)}>Delete</button>
+        {:else if bone}
+          <button onclick={() => studio.openAddChild(bone.characterId, bone.bone)}>Add child...</button>
+        {/if}
+      </div>
+      {#if selected?.kind === 'map'}
+        {@const map = selected}
+        <div class="extra">
+          <label>Extract props within <input type="number" min="50" step="50" bind:value={radius} /> of the camera target</label>
+          <button onclick={() => studio.extractMapProps(map.id, radius)} disabled={studio.busy === 'extract'}>
+            {studio.busy === 'extract' ? 'Extracting...' : 'Extract nearby props'}
+          </button>
+          <p class="hint">The map stays; the props are copied into a new group as editable nodes (up to 300).</p>
+        </div>
+      {/if}
+      {#if selected?.kind === 'character'}
+        {@const character = selected}
+        <div class="extra">
+          <div class="inline">
+            <input placeholder="Outfit name" bind:value={outfitName} onkeydown={(e) => e.key === 'Enter' && saveOutfit()} />
+            <button onclick={saveOutfit} disabled={!outfitName.trim()}>Save outfit</button>
+          </div>
+          {#if saved}<p class="hint">{saved}</p>{/if}
+          <button onclick={() => store.setOutfit(character.id, [])}>Remove all items</button>
+        </div>
+      {/if}
+    </details>
+  {/if}
+</div>
+
+<style>
+  .props {
+    height: 100%;
+    overflow-y: auto;
+    font-size: 12.5px;
+  }
+  .empty {
+    color: var(--muted);
+    padding: 10px;
+  }
+  details {
+    border-bottom: 1px solid var(--border);
+  }
+  summary {
+    cursor: pointer;
+    padding: 5px 8px;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #1f2230;
+    user-select: none;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    min-height: 26px;
+  }
+  .row.wide {
+    align-items: start;
+  }
+  .label {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .value {
+    min-width: 0;
+  }
+  .value input:not([type='checkbox']),
+  .value select {
+    width: 100%;
+    padding: 3px 6px;
+  }
+  .vec {
+    display: flex;
+    gap: 3px;
+  }
+  .readonly {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #b9bdd0;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+  .actions .danger {
+    color: #ff9a9a;
+  }
+  .extra {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 8px 8px;
+  }
+  .extra input[type='number'] {
+    width: 70px;
+  }
+  .inline {
+    display: flex;
+    gap: 4px;
+  }
+  .inline input {
+    flex: 1;
+    min-width: 0;
+  }
+  .hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+  }
+</style>

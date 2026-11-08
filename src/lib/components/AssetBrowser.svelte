@@ -5,11 +5,13 @@
     placeholder?: string;
     selectedId?: string | null;
     onpick: (record: T) => void;
+    /** Called with the record under the mouse or keyboard focus, for live previews. */
+    onpreview?: (record: T) => void;
     /** Optional extra detail line per record. */
     detail?: (record: T) => string;
   }
 
-  let { endpoint, placeholder = 'Search...', selectedId = null, onpick, detail }: Props = $props();
+  let { endpoint, placeholder = 'Search...', selectedId = null, onpick, onpreview, detail }: Props = $props();
 
   const PAGE = 60;
   let query = $state('');
@@ -55,7 +57,12 @@
   <ul>
     {#each records as record (record.id)}
       <li>
-        <button class:selected={record.id === selectedId} onclick={() => onpick(record)}>
+        <button
+          class:selected={record.id === selectedId}
+          onclick={() => onpick(record)}
+          onmouseenter={() => onpreview?.(record)}
+          onfocus={() => onpreview?.(record)}
+        >
           <span class="name">{record.name}</span>
           <span class="detail">{detail ? detail(record) : record.id}</span>
         </button>

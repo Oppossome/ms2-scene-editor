@@ -1,4 +1,4 @@
-/** Saving and restoring dresser outfits (localStorage plus JSON import/export). */
+/** Saved outfits (localStorage). An outfit is what a character node wears, see `nodesToOutfit`. */
 
 export interface OutfitSnapshot {
   version: 1;
@@ -8,7 +8,6 @@ export interface OutfitSnapshot {
   items: { id: string; color?: number }[];
 }
 
-export const CURRENT_KEY = 'bs2.outfit.current';
 export const SAVED_KEY = 'bs2.outfit.saved';
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
@@ -39,15 +38,6 @@ export function parseSnapshotJson(text: string): OutfitSnapshot | null {
   } catch {
     return null;
   }
-}
-
-export function loadCurrent(storage: StorageLike): OutfitSnapshot | null {
-  const raw = storage.getItem(CURRENT_KEY);
-  return raw ? parseSnapshotJson(raw) : null;
-}
-
-export function saveCurrent(storage: StorageLike, snapshot: OutfitSnapshot) {
-  storage.setItem(CURRENT_KEY, JSON.stringify(snapshot));
 }
 
 export function loadSaved(storage: StorageLike): Record<string, OutfitSnapshot> {

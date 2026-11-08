@@ -8,9 +8,22 @@
     gender: Gender;
     wornIds: Set<string>;
     onpick: (item: ItemRecord) => void;
+    /** Called with the item under the mouse or keyboard focus, for live previews. */
+    onpreview?: (item: ItemRecord) => void;
   }
 
-  let { gender, wornIds, onpick }: Props = $props();
+  let { gender, wornIds, onpick, onpreview }: Props = $props();
+
+  /** Arrow keys move between rows, which also previews them (focus previews like hover does). */
+  function onkeydown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const li = (e.target as HTMLElement).closest('li');
+    const next = e.key === 'ArrowDown' ? li?.nextElementSibling : li?.previousElementSibling;
+    const button = next?.querySelector('button');
+    if (!button) return;
+    e.preventDefault();
+    button.focus();
+  }
 
   const PAGE = 60;
   let query = $state('');
@@ -70,10 +83,17 @@
   <div class="count">{total.toLocaleString()} items</div>
   {#if error}<div class="error">{error}</div>{/if}
 
-  <ul>
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <ul {onkeydown}>
     {#each items as item (item.id)}
       <li>
-        <button class:worn={wornIds.has(item.id)} onclick={() => onpick(item)} title={`${item.name} (${item.id})`}>
+        <button
+          class:worn={wornIds.has(item.id)}
+          onclick={() => onpick(item)}
+          onmouseenter={() => onpreview?.(item)}
+          onfocus={() => onpreview?.(item)}
+          title={`${item.name} (${item.id})`}
+        >
           <img src={iconUrl(item.icon)} alt="" loading="lazy" onerror={hideBroken} />
           <span class="text">
             <span class="name">{item.name}</span>

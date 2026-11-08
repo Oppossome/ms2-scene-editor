@@ -1,7 +1,5 @@
 import type { ItemRecord, PaletteColor } from '../types.js';
-import type { OutfitSnapshot } from '../stores/outfits.js';
-import { CharacterRig } from './rig.js';
-import { paletteToTint } from './tint.js';
+import { paletteToTint, type TintColors } from './tint.js';
 
 /** The body's skin tones live in palette 1. */
 export const SKIN_PALETTE = 1;
@@ -17,25 +15,31 @@ export function getPalette(id: number): Promise<PaletteColor[]> {
   return hit;
 }
 
-/** A character ready to place in a scene, wearing a saved outfit. Items that no longer exist are skipped. */
-export async function buildRig(snap: OutfitSnapshot): Promise<CharacterRig> {
-  const skins = await getPalette(SKIN_PALETTE);
-  const skin = skins[snap.skin];
-  const rig = await CharacterRig.create(snap.gender, skin ? paletteToTint(skin) : undefined);
+/** Tint of a skin tone (palette index), or undefined when the palette has no such colour. */
+export async function skinTint(index: number): Promise<TintColors | undefined> {
+  const colors = await getPalette(SKIN_PALETTE);
+  const chosen = colors[index];
+  return chosen ? paletteToTint(chosen) : undefined;
+}
 
-  const records = await Promise.all(
-    snap.items.map((entry) =>
-      fetch(`/api/items/${entry.id}`)
-        .then((r) => (r.ok ? (r.json() as Promise<ItemRecord>) : null))
-        .catch(() => null)
-    )
-  );
-  for (let i = 0; i < records.length; i++) {
-    const item = records[i];
-    if (!item) continue;
-    const colors = item.palette ? await getPalette(item.palette) : [];
-    const chosen = colors[snap.items[i].color ?? item.defaultColor] ?? colors[0];
-    await rig.equip(item, chosen ? paletteToTint(chosen) : undefined).catch(() => undefined);
+/** Tint of an item for a chosen palette colour (its default when none is given); undefined when not customisable. */
+export async function itemTint(item: ItemRecord, index?: number): Promise<TintColors | undefined> {
+  if (!item.palette) return undefined;
+  const colors = await getPalette(item.palette);
+  const chosen = colors[index ?? item.defaultColor] ?? colors[0];
+  return chosen ? paletteToTint(chosen) : undefined;
+}
+
+const itemCache = new Map<string, Promise<ItemRecord | null>>();
+
+/** An item record by id (cached); null when the item no longer exists. */
+export function getItem(id: string): Promise<ItemRecord | null> {
+  let hit = itemCache.get(id);
+  if (!hit) {
+    hit = fetch(`/api/items/${id}`)
+      .then((r) => (r.ok ? (r.json() as Promise<ItemRecord>) : null))
+      .catch(() => null);
+    itemCache.set(id, hit);
   }
-  return rig;
+  return hit;
 }

@@ -1,81 +1,160 @@
 import type { OutfitSnapshot } from '../stores/outfits.js';
-import { parseSnapshot } from '../stores/outfits.js';
 
-export type ObjectKind = 'prop' | 'npc' | 'character' | 'map';
+/**
+ * The scene is a flat list of nodes linked by `parentId`. The array order is the sibling order, which keeps
+ * undo snapshots and JSON simple. Bones are not nodes: a node is mounted on a bone of its parent character
+ * through `attachBone`.
+ */
+export type NodeKind = 'group' | 'prop' | 'npc' | 'character' | 'item' | 'map';
 export type Vec3 = [number, number, number];
 
-export interface SceneObject {
+export interface SceneNode {
   id: string;
-  kind: ObjectKind;
+  kind: NodeKind;
   name: string;
-  /** Converted model path (props and NPCs). */
-  glb?: string;
-  /** Map id (maps): the whole map is drawn as one object. */
-  mapId?: string;
-  /** Outfit of a character. */
-  outfit?: OutfitSnapshot;
-  /** Animation clip to loop (NPC clip name, or a body clip name for characters). */
-  clip?: string;
+  parentId: string | null;
+  /** Bone (or dummy) of the parent character this node is mounted on. */
+  attachBone?: string;
+  /** Local transform. Euler XYZ rotation in radians. For an item it is an offset from its mount point. */
   position: Vec3;
-  /** Euler XYZ in radians. */
   rotation: Vec3;
   scale: Vec3;
   visible: boolean;
+  locked: boolean;
+  /** Converted model path (props and NPCs). */
+  glb?: string;
+  /** Map id (maps). */
+  mapId?: string;
+  /** Character body: 0 male, 1 female. */
+  gender?: 0 | 1;
+  /** Skin palette colour index of a character. */
+  skin?: number;
+  /** Item id and palette colour (items). `slots` lets the data layer resolve slot conflicts without a lookup. */
+  itemId?: string;
+  color?: number;
+  slots?: string[];
+  /** Animation clip to loop (NPC clip name, or a body clip name for characters) and its speed. */
+  clip?: string;
+  speed?: number;
 }
 
 export interface SceneData {
   version: 1;
-  objects: SceneObject[];
+  nodes: SceneNode[];
 }
 
 export const SCENE_KEY = 'bs2.scene.current';
+export const DEFAULT_SKIN = 2;
 
 let counter = 0;
 export function newId(): string {
   counter++;
-  return `o${Date.now().toString(36)}${counter.toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  return `n${Date.now().toString(36)}${counter.toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 }
 
+export const ZERO: Vec3 = [0, 0, 0];
+export const ONE: Vec3 = [1, 1, 1];
+
+/** Kinds that can hold children. */
+export function canHaveChildren(kind: NodeKind): boolean {
+  return kind !== 'item';
+}
+
+const KINDS: readonly NodeKind[] = ['group', 'prop', 'npc', 'character', 'item', 'map'];
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isVec3 = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every(isNum);
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 
-/** Validate untrusted JSON into scene data; invalid objects are dropped, a wrong envelope yields null. */
+/** Validate one untrusted node; returns null when it cannot be used. Parent links are repaired afterwards. */
+function parseNode(raw: unknown): SceneNode | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const kind = o.kind as NodeKind;
+  if (!KINDS.includes(kind)) return null;
+  if (!isVec3(o.position) || !isVec3(o.rotation) || !isVec3(o.scale)) return null;
+  const node: SceneNode = {
+    id: str(o.id) ?? newId(),
+    kind,
+    name: typeof o.name === 'string' && o.name ? o.name : kind,
+    parentId: str(o.parentId) ?? null,
+    position: o.position,
+    rotation: o.rotation,
+    scale: o.scale,
+    visible: o.visible !== false,
+    locked: o.locked === true
+  };
+  const bone = str(o.attachBone);
+  if (bone) node.attachBone = bone;
+  if (kind === 'character') {
+    if (o.gender !== 0 && o.gender !== 1) return null;
+    node.gender = o.gender;
+    node.skin = isNum(o.skin) && Number.isInteger(o.skin) && o.skin >= 0 ? o.skin : DEFAULT_SKIN;
+  } else if (kind === 'item') {
+    if (typeof o.itemId !== 'string' || !/^\d+$/.test(o.itemId)) return null;
+    node.itemId = o.itemId;
+    if (isNum(o.color) && Number.isInteger(o.color) && o.color >= 0) node.color = o.color;
+    node.slots = Array.isArray(o.slots) ? o.slots.filter((s): s is string => typeof s === 'string' && !!s) : [];
+  } else if (kind === 'map') {
+    if (typeof o.mapId !== 'string' || !/^\d+$/.test(o.mapId)) return null;
+    node.mapId = o.mapId;
+  } else if (kind === 'prop' || kind === 'npc') {
+    const glb = str(o.glb);
+    if (!glb) return null;
+    node.glb = glb;
+  }
+  const clip = str(o.clip);
+  if (clip) node.clip = clip;
+  if (isNum(o.speed) && o.speed > 0) node.speed = o.speed;
+  return node;
+}
+
+/**
+ * Validate untrusted JSON into scene data. Invalid nodes are dropped (with their subtree), duplicate ids are
+ * renamed, and parent links that point nowhere, form a cycle or break the rules (items only live on characters,
+ * nothing lives on an item) are repaired by moving the node to the root, or dropping it for items.
+ */
 export function parseScene(data: unknown): SceneData | null {
   if (!data || typeof data !== 'object') return null;
   const d = data as Record<string, unknown>;
-  if (d.version !== 1 || !Array.isArray(d.objects)) return null;
-  const objects: SceneObject[] = [];
+  if (d.version !== 1 || !Array.isArray(d.nodes)) return null;
+
+  const nodes: SceneNode[] = [];
   const seen = new Set<string>();
-  for (const raw of d.objects) {
-    if (!raw || typeof raw !== 'object') continue;
-    const o = raw as Record<string, unknown>;
-    if (o.kind !== 'prop' && o.kind !== 'npc' && o.kind !== 'character' && o.kind !== 'map') continue;
-    if (!isVec3(o.position) || !isVec3(o.rotation) || !isVec3(o.scale)) continue;
-    const obj: SceneObject = {
-      id: typeof o.id === 'string' && o.id && !seen.has(o.id) ? o.id : newId(),
-      kind: o.kind,
-      name: typeof o.name === 'string' ? o.name : o.kind,
-      position: o.position,
-      rotation: o.rotation,
-      scale: o.scale,
-      visible: o.visible !== false
-    };
-    if (o.kind === 'character') {
-      const outfit = parseSnapshot(o.outfit);
-      if (!outfit) continue;
-      obj.outfit = outfit;
-    } else if (o.kind === 'map') {
-      if (typeof o.mapId !== 'string' || !/^\d+$/.test(o.mapId)) continue;
-      obj.mapId = o.mapId;
-    } else {
-      if (typeof o.glb !== 'string' || !o.glb) continue;
-      obj.glb = o.glb;
-    }
-    if (typeof o.clip === 'string' && o.clip) obj.clip = o.clip;
-    seen.add(obj.id);
-    objects.push(obj);
+  for (const raw of d.nodes) {
+    const node = parseNode(raw);
+    if (!node) continue;
+    if (seen.has(node.id)) node.id = newId();
+    seen.add(node.id);
+    nodes.push(node);
   }
-  return { version: 1, objects };
+
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  for (const node of nodes) {
+    if (node.parentId && !byId.has(node.parentId)) node.parentId = null;
+  }
+  for (const node of nodes) {
+    // Walk up; a revisit means a cycle, so cut the link at this node.
+    const visited = new Set<string>([node.id]);
+    let cur = node.parentId ? byId.get(node.parentId) : undefined;
+    while (cur) {
+      if (visited.has(cur.id)) {
+        node.parentId = null;
+        break;
+      }
+      visited.add(cur.id);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+  }
+
+  const valid: SceneNode[] = [];
+  for (const node of nodes) {
+    const parent = node.parentId ? byId.get(node.parentId) : undefined;
+    if (parent && !canHaveChildren(parent.kind)) node.parentId = null;
+    if (node.kind === 'item' && byId.get(node.parentId ?? '')?.kind !== 'character') continue;
+    if (node.attachBone && byId.get(node.parentId ?? '')?.kind !== 'character') delete node.attachBone;
+    valid.push(node);
+  }
+  return { version: 1, nodes: valid };
 }
 
 export function parseSceneJson(text: string): SceneData | null {
@@ -84,6 +163,20 @@ export function parseSceneJson(text: string): SceneData | null {
   } catch {
     return null;
   }
+}
+
+/** Snapshot of what a character wears, from its child item nodes (in sibling order). */
+export function nodesToOutfit(nodes: SceneNode[], characterId: string): OutfitSnapshot | null {
+  const character = nodes.find((n) => n.id === characterId);
+  if (!character || character.kind !== 'character') return null;
+  return {
+    version: 1,
+    gender: character.gender ?? 1,
+    skin: character.skin ?? DEFAULT_SKIN,
+    items: nodes
+      .filter((n) => n.parentId === characterId && n.kind === 'item' && n.itemId)
+      .map((n) => ({ id: n.itemId!, ...(n.color !== undefined ? { color: n.color } : {}) }))
+  };
 }
 
 /** Snapshot-based undo/redo history. States are opaque strings (serialised scenes). */

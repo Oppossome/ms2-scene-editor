@@ -1,6 +1,6 @@
-# BannedStory2 – MapleStory 2 dresser, scene editor and asset extraction
+# BannedStory2 – MapleStory 2 studio and asset extraction
 
-Two parts: tools that unpack the (discontinued) MapleStory 2 Steam install (`cmd/extract/`), and a local SvelteKit app (`src/`) that uses the result to dress characters, place models and browse real game maps. Personal use only; don't redistribute the assets.
+Two parts: tools that unpack the (discontinued) MapleStory 2 Steam install (`cmd/extract/`), and a local SvelteKit app (`src/`) that uses the result as a Roblox-style studio: a model hierarchy, a properties list, character dressing and real game maps. Personal use only; don't redistribute the assets.
 
 Node isn't installed globally on this machine, so every command runs inside `nix shell nixpkgs#nodejs --command ...`.
 
@@ -19,8 +19,7 @@ Other scripts: `npm run check` (svelte-check), `npm test` (Vitest), `npm run bui
 
 | Page | What it does |
 | --- | --- |
-| `/dresser` | Pick a gender and skin tone, wear any of ~17k items (clothes, hair, hats, weapons) with palette colours, play any of ~1,900 character animations, save named outfits, export the character as GLB (tints baked in, optionally with the playing animation). The current outfit is restored on reload. |
-| `/scene` | Place props, NPCs, dressed characters and whole maps. Click to select, move/rotate/scale with gizmos (G/R/S, snap), outliner, inspector, per-object animation, undo/redo (Ctrl+Z/Y), duplicate (Ctrl+D), focus (F), autosave, JSON import/export, GLB export of the scene or of one object with its animation. A map object can be "exploded": the props near the camera become individually editable objects. |
+| `/scene` (Studio) | One page, three areas. **Explorer** (right, top): the scene as a tree; a character owns its worn items as child nodes plus a `Skeleton` of bones. Drag to reparent or reorder, drop onto a bone to mount a node there (a sword on a hand, a prop on the head), rename (F2 / double click), hide, lock, filter, right-click menu. **Properties** (right, bottom): sections for the selected node (name, transform with scrubbable fields, gender, skin tone and item colours, animation clip and speed, attach bone, source, locked) or a selected bone. **Viewport**: click to select (Alt+click the top-level node), right-click for the menu, move/rotate/scale gizmos (G/R/S, snap). **Toolbox** (left): props, NPCs, maps, base characters and saved outfits. Also: undo/redo (Ctrl+Z/Y), duplicate (Ctrl+D), group (Ctrl+G), focus (F), autosave, JSON import/export, GLB export of the scene or of one node with its animation. |
 | `/maps` | Browse ~1,700 maps and view them drawn from the game's own xblock data (instanced: Henesys is ~4.4k props, Tria ~15k). Terrain beyond the placed props isn't available (see gaps). |
 | `/models` | Browse NPCs and map props with their animations. |
 
@@ -28,16 +27,18 @@ Other scripts: `npm run check` (svelte-check), `npm test` (Vitest), `npm run bui
 
 - `src/routes/api/assets/[...path]` streams files from `extracted/` (only `converted/` and `Resource/Image/`), case-insensitively, with range and ETag support. GLBs reference their textures by relative URL, so they just work through this route.
 - `scripts/build-index.ts` reads `Xml/item`, `Xml/npc`, `Xml/map`, the English string tables, `colorpalette.xml`, the flat model definitions and the `asset-web-metadata` N-Triples (llid -> path) into `.data/`. Server routes search those indexes (`/api/items`, `/api/npcs`, `/api/props`, `/api/maps`, `/api/maps/[id]`, `/api/palettes/[id]`, `/api/clips`).
-- **Dressing** (`src/lib/character/rig.ts`): clothes are skinned onto the same `Bip01` skeleton as the body, so their meshes are re-bound to the body's bones by name (extra bones are re-parented) and the body meshes they replace (`CL_Skin`, `PA_Skin`, ...) are hidden. Hats, hair, accessories and weapons are static meshes parented to the body node named by the item (`Bip01 Head`, `Weapon_Side_L_Point`, ...); hair replaces the body's default hair node. Weapons sit on their carry points, not in the hand.
+- **Dressing** (`src/lib/character/rig.ts`): clothes are skinned onto the same `Bip01` skeleton as the body, so their meshes are re-bound to the body's bones by name (extra bones are re-parented) and the body meshes they replace (`CL_Skin`, `PA_Skin`, ...) are hidden. Hats, hair, accessories and weapons are static meshes in a mount group parented to a bone or dummy node (`Bip01 Head`, `Weapon_Side_L_Point`, ...); the mount group carries the item's offset and can be moved to any other bone from its Properties or by dragging it onto a bone in the Explorer. Hair replaces the body's default hair node.
+- **Dressing is the scene tree** (`src/lib/scene/`, `src/lib/studio/`): right-click a character (or one of its bones) and choose **Add Child...**. The item browser previews whatever you hover or arrow to on the real character (`rig.previewEquip` covers the item it would replace and puts it back afterwards; nothing is saved or recorded), and a click wears it as a child node. A click on a worn item takes it off. The tree is a flat list of nodes with `parentId`; `SceneRuntime` (`runtime.svelte.ts`) mirrors it into a three.js graph and reconciles each character's rig with its item children, so editing one item never rebuilds the character.
 - **Colours** (`tint.ts`): `_c` textures are RGB masks that select the item's three palette channels; a patched `MeshStandardMaterial` re-colours masked regions from the palette, keeping the base lightness. The exact blend is approximated by eye against the in-game icons. Export bakes it into the diffuse texture.
 - **Maps** (`src/lib/server/xblock.ts`, `src/lib/maps/`): an xblock lists entities by flat-model name with position (cm, Z-up), rotation (degrees, applied as Rz*Ry*Rx) and scale. Each is resolved to a converted model and drawn with one `InstancedMesh` per mesh part. About 98% of entities resolve; waypoints, triggers and spawners have no model.
 
-Layout: `src/lib/{assets,character,maps,scene,export,stores,server,components}`, routes in `src/routes`, index builder in `scripts/`.
+Layout: `src/lib/{assets,character,maps,scene,studio,export,stores,server,components}`, routes in `src/routes`, index builder in `scripts/`.
 
 ### Known gaps in the app
 
 - Terrain (`PrecomputedTerrain/*.tok`), skyboxes, lighting and particle effects aren't decoded, so maps show props only.
-- Faces are static (no morph targets/expressions), and the held-weapon pose isn't implemented (items attach to their carry points).
+- Faces are static (no morph targets/expressions), and there is no held-weapon pose: weapons sit on their carry points unless you mount them on a hand bone yourself.
+- Selection is a single node (no multi-select), bones can't be posed, and the Add Child preview of a static item ignores a bone override (it shows at the item's own attach point).
 - Large maps keep every instance on the GPU; very big maps (like Tria) are slow on weak machines.
 - The app has no authentication or sandboxing. It's meant to run locally.
 
