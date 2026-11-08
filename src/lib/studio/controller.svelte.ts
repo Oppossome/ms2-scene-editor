@@ -9,8 +9,12 @@ import { SceneState, type NewItem } from '../scene/store.svelte.js';
 import { saveNamed, type OutfitSnapshot } from '../stores/outfits.js';
 import type { ChannelIndexes } from '../character/tint.js';
 import type { ItemRecord, MapData } from '../types.js';
+import { lastFrame, stepFrame } from '../scene/properties.js';
 import { pathOf } from '../scene/tree.js';
 import { Vector3 } from 'three';
+
+/** Frame steps closer together than this belong to one undo step. */
+const STEP_BURST_MS = 800;
 
 /** What a context menu or the Add Child panel is about. */
 export type MenuTarget = { type: 'node'; id: string } | { type: 'bone'; characterId: string; bone: string } | { type: 'empty' };
@@ -330,6 +334,44 @@ export class Studio {
 
   async importJson(file: File) {
     this.message = this.store.loadJson(await file.text()) ? '' : 'That file is not a valid scene.';
+  }
+
+  // ----- animation frame ------------------------------------------------------------------------------------------
+
+  private lastStep = { id: '', at: 0 };
+
+  /** Hold a node's animation on a frame (kept inside its clip). `record` is false while a drag already made its undo step. */
+  setFrame(id: string, frame: number, record = true) {
+    const node = this.store.node(id);
+    if (!node) return;
+    const last = lastFrame(this.runtime.clipsOf(id), node.clip);
+    const next = Math.max(0, Math.round(last === undefined ? frame : Math.min(frame, last)));
+    this.store.update(id, { freeze: next }, record);
+  }
+
+  /**
+   * Step a node's animation by whole frames from where it is, holding it there. Steps in quick succession on one
+   * node make a single undo step, so stepping through a clip does not fill the history.
+   */
+  stepFrame(id: string, delta: number) {
+    const node = this.store.node(id);
+    const clips = this.runtime.clipsOf(id);
+    if (!node || !clips.length) return;
+    const frame = stepFrame(node.freeze ?? this.runtime.currentFrame(id), delta, lastFrame(clips, node.clip));
+    this.setFrame(id, frame, !this.inBurst(id));
+  }
+
+  /** Hold a node on a frame from a control that fires in quick succession (keys on the slider): one undo step per burst. */
+  holdFrame(id: string, frame: number) {
+    this.setFrame(id, frame, !this.inBurst(id));
+  }
+
+  /** True when the previous frame edit was on this node a moment ago; notes this edit for the next call. */
+  inBurst(id: string): boolean {
+    const now = performance.now();
+    const burst = this.lastStep.id === id && now - this.lastStep.at < STEP_BURST_MS;
+    this.lastStep = { id, at: now };
+    return burst;
   }
 
   // ----- view helpers --------------------------------------------------------------------------------------------

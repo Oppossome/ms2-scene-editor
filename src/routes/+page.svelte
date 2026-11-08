@@ -64,6 +64,9 @@
     runtime.setSelection(store.selectedId, store.selectedBone);
   });
 
+  /** Step the selected animation: `,` and `.` by a frame, Shift with them by ten. */
+  const FRAME_KEYS: Record<string, number> = { ',': -1, '.': 1, '<': -10, '>': 10 };
+
   function onKey(e: KeyboardEvent) {
     const el = e.target as HTMLElement | null;
     if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
@@ -93,6 +96,7 @@
     else if (!mod && key === 'r') store.mode = 'rotate';
     else if (!mod && key === 's') store.mode = 'scale';
     else if (!mod && key === 'f') studio.focus(id);
+    else if (!mod && id && FRAME_KEYS[e.key]) studio.stepFrame(id, FRAME_KEYS[e.key]);
     else if (!mod && key === 'i') {
       e.preventDefault();
       studio.openToolbox();

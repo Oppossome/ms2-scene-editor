@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneNode } from './model';
-import { applyChange, describeBone, describeNode, RAD, type PropContext } from './properties';
+import { applyChange, describeBone, describeNode, RAD, stepFrame, type PropContext } from './properties';
 
 const node = (over: Partial<SceneNode> = {}): SceneNode => ({
   id: 'a',
@@ -127,23 +127,49 @@ describe('freezing an animation', () => {
   const clips = [{ name: 'idle_a', duration: 2.1 }];
   const rows = (n: SceneNode, withClips = clips) => describeNode(ctx(n, { clips: withClips })).flatMap((s) => s.rows);
 
-  it('offers a Freeze switch, and the frame only while frozen', () => {
-    const playing = rows(node({ kind: 'character', glb: undefined, gender: 1, clip: 'idle_a' }));
-    expect(playing.find((r) => r.key === 'freeze')).toMatchObject({ type: 'bool', value: false });
-    expect(playing.find((r) => r.key === 'frame')).toBeUndefined();
-    const frozen = rows(node({ kind: 'character', glb: undefined, gender: 1, clip: 'idle_a', freeze: 12 }));
-    expect(frozen.find((r) => r.key === 'freeze')?.value).toBe(true);
-    expect(frozen.find((r) => r.key === 'frame')).toMatchObject({ type: 'number', value: 12, min: 0, max: 63, step: 1 });
+  it('offers one playback row that says whether the animation is held, and on which frame', () => {
+    const playing = rows(node({ kind: 'character', glb: undefined, gender: 1, clip: 'idle_a' })).filter((r) => r.type === 'transport');
+    expect(playing).toHaveLength(1);
+    expect(playing[0]).toMatchObject({ key: 'playback', value: false, frame: undefined, max: 63 });
+    const held = rows(node({ kind: 'character', glb: undefined, gender: 1, clip: 'idle_a', freeze: 12 })).find((r) => r.type === 'transport');
+    expect(held).toMatchObject({ value: true, frame: 12, max: 63 });
   });
 
-  it('has no freeze rows for nodes without animations', () => {
-    expect(rows(node({ kind: 'prop' }), []).some((r) => r.key === 'freeze')).toBe(false);
+  it('has no playback row for nodes without animations, and no max for an unknown clip', () => {
+    expect(rows(node({ kind: 'prop' }), []).some((r) => r.type === 'transport')).toBe(false);
+    const unknown = rows(node({ kind: 'character', glb: undefined, gender: 1, clip: 'other' })).find((r) => r.type === 'transport');
+    expect(unknown?.max).toBeUndefined();
+  });
+
+  it('keeps a held frame inside the clip when showing it', () => {
+    const held = rows(node({ kind: 'character', glb: undefined, gender: 1, clip: 'idle_a', freeze: 200 })).find((r) => r.type === 'transport');
+    expect(held).toMatchObject({ frame: 63, max: 63 });
+  });
+
+  it('clamps a held frame to a shorter clip when the clip changes, and leaves it otherwise', () => {
+    const clips = [{ name: 'short', duration: 1 }, { name: 'long', duration: 4 }];
+    const held = node({ kind: 'character', glb: undefined, gender: 1, clip: 'long', freeze: 90 });
+    expect(applyChange('clip', 'short', held, { clips })).toEqual({ clip: 'short', freeze: 30 });
+    expect(applyChange('clip', 'long', held, { clips })).toEqual({ clip: 'long' });
+    expect(applyChange('clip', 'short', node({ clip: 'long' }), { clips })).toEqual({ clip: 'short' });
+    // an unknown clip length cannot clamp anything
+    expect(applyChange('clip', 'other', held, { clips })).toEqual({ clip: 'other' });
+    expect(applyChange('clip', 'short', held)).toEqual({ clip: 'short' });
+  });
+
+  it('steps a frame, wrapping round the clip', () => {
+    expect(stepFrame(5, 1, 63)).toBe(6);
+    expect(stepFrame(5, -1, 63)).toBe(4);
+    expect(stepFrame(63, 1, 63)).toBe(0);
+    expect(stepFrame(0, -1, 63)).toBe(63);
+    expect(stepFrame(0, -1)).toBe(0);
+    expect(stepFrame(9, 1)).toBe(10);
   });
 
   it('freezes on the current frame, or releases', () => {
-    expect(applyChange('freeze', true, undefined, 17)).toEqual({ freeze: 17 });
+    expect(applyChange('freeze', true, undefined, { frame: 17 })).toEqual({ freeze: 17 });
     expect(applyChange('freeze', true)).toEqual({ freeze: 0 });
-    expect(applyChange('freeze', false, undefined, 17)).toEqual({ freeze: undefined });
+    expect(applyChange('freeze', false, undefined, { frame: 17 })).toEqual({ freeze: undefined });
     expect(applyChange('freeze', 'x')).toBeNull();
   });
 

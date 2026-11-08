@@ -6,6 +6,7 @@
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
   import ClipPicker from './ClipPicker.svelte';
+  import FrameScrubber from './FrameScrubber.svelte';
   import NumberField from './NumberField.svelte';
   import PaletteRow from './PaletteRow.svelte';
   import type { PreviewSource } from './preview.svelte.js';
@@ -75,7 +76,7 @@
 
   function edit(key: string, value: unknown) {
     const node = selected;
-    const patch = node ? applyChange(key, value, node, runtime.currentFrame(node.id)) : null;
+    const patch = node ? applyChange(key, value, node, { frame: runtime.currentFrame(node.id), clips: runtime.clipsOf(node.id) }) : null;
     if (node && patch) store.update(node.id, patch);
   }
 
@@ -151,6 +152,18 @@
                 <ClipPicker clips={row.clips ?? []} value={row.value as string} source={clipSource} oncommit={(name) => edit(row.key, name)} />
               {:else if row.type === 'palette'}
                 <PaletteRow palette={row.palette ?? 0} value={row.value as number} channel={row.channel} onpick={(i) => edit(row.key, i)} />
+              {:else if row.type === 'transport'}
+                {#if row.max !== undefined && selected}
+                  {@const id = selected.id}
+                  <FrameScrubber
+                    frame={row.frame}
+                    max={row.max}
+                    live={() => runtime.currentFrame(id)}
+                    onstart={() => store.record()}
+                    onscrub={(f, dragging) => (dragging ? studio.setFrame(id, f, false) : studio.holdFrame(id, f))}
+                    onresume={() => edit('freeze', false)}
+                  />
+                {/if}
               {:else if row.type === 'action'}
                 <button onclick={resetOffset}>{row.value}</button>
               {:else}

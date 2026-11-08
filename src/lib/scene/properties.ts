@@ -1,7 +1,7 @@
 import type { ClipInfo } from '../types.js';
 import { DEFAULT_EYE, FRAME_RATE, type SceneNode, type Vec3 } from './model.js';
 
-export type PropType = 'string' | 'number' | 'vec3' | 'bool' | 'enum' | 'clip' | 'palette' | 'readonly' | 'action';
+export type PropType = 'string' | 'number' | 'vec3' | 'bool' | 'enum' | 'clip' | 'palette' | 'readonly' | 'action' | 'transport';
 
 export interface PropOption {
   value: string;
@@ -17,6 +17,8 @@ export interface PropRow {
   step?: number;
   min?: number;
   max?: number;
+  /** Frame a `transport` row is held on (undefined while it plays; `value` says whether it is held). */
+  frame?: number;
   options?: PropOption[];
   /** Clips a `clip` row can choose from. */
   clips?: ClipInfo[];
@@ -95,9 +97,23 @@ function channelRows(ctx: PropContext): PropRow[] {
 }
 
 /** The last frame of a node's clip, when it is known. */
-function lastFrame(clips: ClipInfo[], name: string | undefined): number | undefined {
+export function lastFrame(clips: ClipInfo[], name: string | undefined): number | undefined {
   const clip = clips.find((c) => c.name === name);
   return clip ? Math.max(0, Math.floor(clip.duration * FRAME_RATE)) : undefined;
+}
+
+/** The frame a node is held on, kept inside its clip (a scene can be saved with a clip that was longer). */
+function heldFrame(node: SceneNode, clips: ClipInfo[]): number | undefined {
+  const last = lastFrame(clips, node.clip);
+  return node.freeze !== undefined && last !== undefined ? Math.min(node.freeze, last) : node.freeze;
+}
+
+/** A frame `delta` steps away, wrapping round the clip (to its last frame when known) like the loop does. */
+export function stepFrame(frame: number, delta: number, last?: number): number {
+  const next = frame + delta;
+  if (last === undefined) return Math.max(0, next);
+  const length = last + 1;
+  return ((next % length) + length) % length;
 }
 
 /** The rows to show for a node, grouped into sections (empty sections are left out). */
@@ -150,9 +166,8 @@ export function describeNode(ctx: PropContext): PropSection[] {
   add('Animation', [
     ctx.clips.length ? { key: 'clip', label: 'Clip', type: 'clip', value: node.clip ?? '', clips: ctx.clips } : null,
     ctx.clips.length ? { key: 'speed', label: 'Speed', type: 'number', value: node.speed ?? 1, step: 0.1, min: 0.05 } : null,
-    ctx.clips.length ? { key: 'freeze', label: 'Freeze', type: 'bool', value: node.freeze !== undefined } : null,
-    ctx.clips.length && node.freeze !== undefined
-      ? { key: 'frame', label: 'Frame', type: 'number', value: node.freeze, step: 1, min: 0, max: lastFrame(ctx.clips, node.clip) }
+    ctx.clips.length
+      ? { key: 'playback', label: 'Playback', type: 'transport', value: node.freeze !== undefined, frame: heldFrame(node, ctx.clips), min: 0, max: lastFrame(ctx.clips, node.clip) }
       : null
   ]);
 
@@ -184,9 +199,15 @@ export function describeNode(ctx: PropContext): PropSection[] {
   return out;
 }
 
+/** What an edit may need to know besides the node: the frame its animation is on now, and the clips it can play. */
+export interface ChangeEnv {
+  frame?: number;
+  clips?: ClipInfo[];
+}
+
 /** The node patch a property edit stands for, or null when the value is not usable. */
-/** `frame` is the frame the animation is on now: freezing holds it there. */
-export function applyChange(key: string, value: unknown, node?: SceneNode, frame = 0): Partial<SceneNode> | null {
+export function applyChange(key: string, value: unknown, node?: SceneNode, env: ChangeEnv = {}): Partial<SceneNode> | null {
+  const frame = env.frame ?? 0;
   switch (key) {
     case 'name':
       return typeof value === 'string' && value.trim() ? { name: value.trim() } : null;
@@ -214,8 +235,14 @@ export function applyChange(key: string, value: unknown, node?: SceneNode, frame
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return null;
       return { channelColors: { ...node?.channelColors, [`ch${key.slice(-1)}`]: value } };
     }
-    case 'clip':
-      return typeof value === 'string' ? { clip: value || undefined } : null;
+    case 'clip': {
+      if (typeof value !== 'string') return null;
+      const clip = value || undefined;
+      // A held frame stays on the same frame of the new clip, or on its last one when that is shorter.
+      const last = lastFrame(env.clips ?? [], clip);
+      const held = node?.freeze;
+      return held !== undefined && last !== undefined && held > last ? { clip, freeze: last } : { clip };
+    }
     case 'freeze':
       return typeof value === 'boolean' ? { freeze: value ? Math.max(0, Math.round(frame)) : undefined } : null;
     case 'frame':
