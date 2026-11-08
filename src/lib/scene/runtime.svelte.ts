@@ -20,12 +20,13 @@ import {
 import { untrack } from 'svelte';
 import { AnimationPlayer } from '../assets/animation.js';
 import { instantiate, loadClips } from '../assets/loader.js';
+import { embeddedClips, fetchBodyClips, idleClip } from '../assets/clips.js';
 import { bodyClipDir } from '../assets/urls.js';
 import { getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig, type BoneInfo } from '../character/rig.js';
 import { exportGlb } from '../export/glb.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
-import type { MapData } from '../types.js';
+import type { ClipInfo, MapData } from '../types.js';
 import { DEFAULT_SKIN, type SceneNode } from './model.js';
 import type { LocalTransform } from './store.svelte.js';
 import { descendantsOf, rootOf } from './tree.js';
@@ -80,7 +81,7 @@ export class SceneRuntime {
 
   /** Bumped when the object graph changes (models, rigs, bones) so the UI can re-read it. */
   version = $state(0);
-  clipNames = $state.raw<Record<string, string[]>>({});
+  clipInfos = $state.raw<Record<string, ClipInfo[]>>({});
 
   private views = new Map<string, View>();
   private tags = new WeakMap<Object3D, string>();
@@ -129,8 +130,8 @@ export class SceneRuntime {
     return this.views.get(id)?.player ?? null;
   }
 
-  clipsOf(id: string): string[] {
-    return this.clipNames[id] ?? [];
+  clipsOf(id: string): ClipInfo[] {
+    return this.clipInfos[id] ?? [];
   }
 
   rigOf(characterId: string): CharacterRig | null {
@@ -305,10 +306,10 @@ export class SceneRuntime {
         itemView.link.bone = '';
       }
     }
-    if (this.clipNames[view.id]) {
-      const next = { ...this.clipNames };
+    if (this.clipInfos[view.id]) {
+      const next = { ...this.clipInfos };
       delete next[view.id];
-      this.clipNames = next;
+      this.clipInfos = next;
     }
   }
 
@@ -319,7 +320,7 @@ export class SceneRuntime {
     this.disposeContent(view);
     const node = view.node;
     try {
-      let names: string[] = [];
+      let clips: ClipInfo[] = [];
       if (node.kind === 'character') {
         const rig = await CharacterRig.create(node.gender ?? 1, await skinTint(node.skin ?? DEFAULT_SKIN));
         if (gen !== view.gen) return rig.dispose();
@@ -329,8 +330,8 @@ export class SceneRuntime {
         view.group.add(rig.root);
         view.player = new AnimationPlayer(rig.root);
         this.tag(rig.root, view.id);
-        const res = await fetch(`/api/clips?gender=${rig.gender}`);
-        if (res.ok && gen === view.gen) names = await res.json();
+        const bodyClips = await fetchBodyClips(rig.gender).catch(() => []);
+        if (gen === view.gen) clips = bodyClips;
       } else if (node.kind === 'map' && node.mapId) {
         const res = await fetch(`/api/maps/${node.mapId}`);
         if (!res.ok) throw new Error(`map ${node.mapId}: ${res.status}`);
@@ -346,16 +347,16 @@ export class SceneRuntime {
         view.player = new AnimationPlayer(loaded.object);
         view.content = loaded.object;
         view.group.add(loaded.object);
-        names = loaded.animations.map((c) => c.name);
+        clips = embeddedClips(loaded.animations);
       }
       if (gen !== view.gen) return;
       if (view.player) view.player.mixer.timeScale = view.node.speed ?? 1;
-      if (names.length) this.clipNames = { ...this.clipNames, [view.id]: names };
+      if (clips.length) this.clipInfos = { ...this.clipInfos, [view.id]: clips };
       this.reparentAll();
       if (view.rig) this.syncCharacterItems(view);
       this.bump();
       if (!view.node.clip) {
-        const idle = names.find((n) => /^idle/i.test(n));
+        const idle = idleClip(clips);
         if (idle) this.hooks.defaultClip?.(view.id, idle);
       }
       await this.playClip(view);

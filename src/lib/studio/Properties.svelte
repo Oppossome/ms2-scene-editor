@@ -5,8 +5,10 @@
   import { pathOf } from '#lib/scene/tree.js';
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
+  import ClipPicker from './ClipPicker.svelte';
   import NumberField from './NumberField.svelte';
   import PaletteRow from './PaletteRow.svelte';
+  import type { PreviewSource } from './preview.svelte.js';
 
   let { studio }: { studio: Studio } = $props();
 
@@ -21,6 +23,19 @@
     const id = selected?.kind === 'item' ? selected.itemId : undefined;
     itemRecord = null;
     if (id) void getItem(id).then((r) => (itemRecord = store.selected?.itemId === id ? r : null));
+  });
+
+  /** What the clip picker's canvas shows for the selected node: the node itself with its outfit. */
+  const clipSource = $derived.by<PreviewSource | null>(() => {
+    const node = selected;
+    if (!node) return null;
+    if (node.kind === 'character') {
+      const items = store.nodes
+        .filter((n) => n.parentId === node.id && n.kind === 'item' && n.itemId)
+        .map((n) => ({ id: n.itemId!, ...(n.color !== undefined ? { color: n.color } : {}) }));
+      return { kind: 'character', gender: node.gender ?? 1, skin: node.skin, items };
+    }
+    return node.glb ? { kind: 'model', glb: node.glb, scale: node.scale[0] } : null;
   });
 
   const sections = $derived.by(() => {
@@ -126,6 +141,8 @@
                     <option value={option.value}>{option.label}</option>
                   {/each}
                 </select>
+              {:else if row.type === 'clip'}
+                <ClipPicker clips={row.clips ?? []} value={row.value as string} source={clipSource} oncommit={(name) => edit(row.key, name)} />
               {:else if row.type === 'palette'}
                 <PaletteRow palette={row.palette ?? 0} value={row.value as number} onpick={(i) => edit(row.key, i)} />
               {:else if row.type === 'action'}

@@ -1,6 +1,7 @@
+import type { ClipInfo } from '../types.js';
 import type { SceneNode, Vec3 } from './model.js';
 
-export type PropType = 'string' | 'number' | 'vec3' | 'bool' | 'enum' | 'palette' | 'readonly' | 'action';
+export type PropType = 'string' | 'number' | 'vec3' | 'bool' | 'enum' | 'clip' | 'palette' | 'readonly' | 'action';
 
 export interface PropOption {
   value: string;
@@ -16,6 +17,8 @@ export interface PropRow {
   step?: number;
   min?: number;
   options?: PropOption[];
+  /** Clips a `clip` row can choose from. */
+  clips?: ClipInfo[];
   /** Palette id for `palette` rows (skin tones use the body palette). */
   palette?: number;
   /** Explains why the row cannot be edited. */
@@ -34,7 +37,7 @@ export interface PropContext {
   /** Path of names from the root, for the Parent row. */
   path: string[];
   /** Clips the node can play (empty when none). */
-  clips: string[];
+  clips: ClipInfo[];
   /** Bones and dummy nodes of the parent character a node can be mounted on. */
   bones: string[];
   /** Default bone of a static item. */
@@ -106,15 +109,7 @@ export function describeNode(ctx: PropContext): PropSection[] {
   ]);
 
   add('Animation', [
-    ctx.clips.length
-      ? {
-          key: 'clip',
-          label: 'Clip',
-          type: 'enum',
-          value: node.clip ?? '',
-          options: [{ value: '', label: '(none)' }, ...ctx.clips.map((c) => ({ value: c, label: c }))]
-        }
-      : null,
+    ctx.clips.length ? { key: 'clip', label: 'Clip', type: 'clip', value: node.clip ?? '', clips: ctx.clips } : null,
     ctx.clips.length ? { key: 'speed', label: 'Speed', type: 'number', value: node.speed ?? 1, step: 0.1, min: 0.05 } : null
   ]);
 

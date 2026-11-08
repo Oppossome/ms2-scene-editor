@@ -1,10 +1,11 @@
-import fs from 'node:fs';
+import path from 'node:path';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { EXTRACTED_ROOT } from '#lib/server/assets.js';
-import path from 'node:path';
+import { listClips } from '#lib/server/clips.js';
+import { dataFile } from '#lib/server/index-data.js';
 
-/** Names of the per-clip animation files of a body model (e.g. "idle_a", "assassin_dodge_a"). */
+/** The per-clip animation files of a body model (e.g. "idle_a", "assassin_dodge_a") with their durations. */
 export const GET: RequestHandler = ({ url }) => {
   const gender = url.searchParams.get('gender');
   if (gender !== '0' && gender !== '1') error(400, 'gender must be 0 or 1');
@@ -13,11 +14,7 @@ export const GET: RequestHandler = ({ url }) => {
     'converted/models/Character',
     gender === '0' ? 'male/m_body.anims' : 'female/f_body.anims'
   );
-  if (!fs.existsSync(dir)) error(404, 'No clips found');
-  const names = fs
-    .readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.glb'))
-    .map((f) => f.replace(/\.glb$/i, ''))
-    .sort();
-  return json(names);
+  const clips = listClips(dir, dataFile(`clips-${gender}.json`));
+  if (!clips) error(404, 'No clips found');
+  return json(clips);
 };

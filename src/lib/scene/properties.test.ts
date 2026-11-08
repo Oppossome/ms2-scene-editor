@@ -40,9 +40,10 @@ describe('describeNode', () => {
   });
 
   it('adds Animation when the node has clips', () => {
-    const c = ctx(node({ clip: 'idle' }), { clips: ['idle', 'walk'] });
+    const c = ctx(node({ clip: 'idle' }), { clips: [{ name: 'idle', duration: 2 }, { name: 'walk', duration: 0.8 }] });
     expect(sections(c)).toContain('Animation');
-    expect(row(c, 'clip')?.options?.map((o) => o.value)).toEqual(['', 'idle', 'walk']);
+    expect(row(c, 'clip')).toMatchObject({ type: 'clip', value: 'idle' });
+    expect(row(c, 'clip')?.clips?.map((x) => x.name)).toEqual(['idle', 'walk']);
     expect(row(c, 'speed')?.value).toBe(1);
   });
 

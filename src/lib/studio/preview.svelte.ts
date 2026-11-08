@@ -1,18 +1,19 @@
 import type { AnimationClip, Object3D } from 'three';
 import { AnimationPlayer } from '../assets/animation.js';
+import { embeddedClips, fetchBodyClips, idleClip } from '../assets/clips.js';
 import { instantiate, loadClips } from '../assets/loader.js';
 import { bodyClipDir } from '../assets/urls.js';
 import { getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig } from '../character/rig.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
 import { DEFAULT_SKIN } from '../scene/model.js';
-import type { ItemRecord, MapData } from '../types.js';
+import type { ClipInfo, ItemRecord, MapData } from '../types.js';
 
 /** What the preview pane shows. */
 export type PreviewSource =
-  | { kind: 'model'; glb: string; scale?: number }
+  | { kind: 'model'; glb: string; scale?: number; clip?: string }
   | { kind: 'map'; id: string }
-  | { kind: 'character'; gender: 0 | 1; skin?: number; items: { id: string; color?: number }[] }
+  | { kind: 'character'; gender: 0 | 1; skin?: number; items: { id: string; color?: number }[]; clip?: string }
   | {
       kind: 'item';
       item: ItemRecord;
@@ -38,7 +39,7 @@ export class PreviewController {
   /** Whether the thing is a map (no ground grid, bigger scale). */
   isMap = $state(false);
 
-  clipNames = $state.raw<string[]>([]);
+  clips = $state.raw<ClipInfo[]>([]);
   clip = $state('');
   playing = $state(false);
   loop = $state(true);
@@ -85,12 +86,12 @@ export class PreviewController {
     if (s.scale && s.scale !== 1) loaded.object.scale.setScalar(s.scale);
     this.embedded = loaded.animations;
     this.player = new AnimationPlayer(loaded.object);
-    this.clipNames = loaded.animations.map((c) => c.name);
+    this.clips = embeddedClips(loaded.animations);
     this.object = loaded.object;
     this.frameToken++;
     this.status = '';
-    const idle = this.clipNames.find((n) => /^idle/i.test(n)) ?? this.clipNames[0];
-    if (idle) await this.play(idle);
+    const start = this.clips.some((c) => c.name === s.clip) ? s.clip : (idleClip(this.clips) ?? this.clips[0]?.name);
+    if (start) await this.play(start);
   }
 
   private async showMap(s: Extract<PreviewSource, { kind: 'map' }>, gen: number) {
@@ -131,7 +132,7 @@ export class PreviewController {
     this.frameToken++;
     this.status = '';
     if (!(await this.wear(rig, s.items, gen))) return;
-    void this.loadBodyClips(s.gender, gen, 'idle_a');
+    void this.loadBodyClips(s.gender, gen, s.clip ?? 'idle_a');
   }
 
   /** Put items on a rig in order; false when a newer `show` took over meanwhile. */
@@ -175,12 +176,10 @@ export class PreviewController {
 
   private async loadBodyClips(gender: 0 | 1, gen: number, start: string) {
     try {
-      const res = await fetch(`/api/clips?gender=${gender}`);
-      if (!res.ok || gen !== this.gen) return;
-      const names = (await res.json()) as string[];
+      const clips = await fetchBodyClips(gender);
       if (gen !== this.gen) return;
-      this.clipNames = names;
-      const first = names.includes(start) ? start : names.find((n) => /^idle/i.test(n));
+      this.clips = clips;
+      const first = clips.some((c) => c.name === start) ? start : idleClip(clips);
       if (first) await this.play(first);
     } catch {
       // Without clips the pose just stays the bind pose.
@@ -241,7 +240,7 @@ export class PreviewController {
     this.progress = null;
     this.facts = '';
     this.isMap = false;
-    this.clipNames = [];
+    this.clips = [];
     this.clip = '';
     this.playing = false;
   }

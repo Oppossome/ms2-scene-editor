@@ -5,6 +5,9 @@ import type { IndexMeta, ItemRecord, MapRecord, NpcRecord, PaletteColor } from '
 
 const DATA_DIR = path.resolve(process.env.MS2_DATA ?? '.data');
 
+/** A file inside the data folder (for derived caches written at run time). */
+export const dataFile = (name: string) => path.join(DATA_DIR, name);
+
 interface Cached<T> {
   mtimeMs: number;
   value: T;
