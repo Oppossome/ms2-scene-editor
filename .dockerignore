@@ -1,0 +1,16 @@
+.git
+.gitignore
+.vscode
+.svelte-kit
+build
+node_modules
+vendor
+# The game's files are mounted into the container, never baked into the image.
+extracted
+.data
+# The extraction tools and their logs are not part of the app.
+cmd
+*.log
+shell.nix
+Dockerfile
+.dockerignore

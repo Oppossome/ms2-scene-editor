@@ -35,6 +35,14 @@
     snapshot: OutfitSnapshot;
   }
 
+  /** Detail line of an NPC row: its level (or the levels of the NPCs it stands for) and how many there are. */
+  function npcDetail(r: { id?: string; level?: number; levels?: [number, number]; variants?: number }) {
+    const [low, high] = r.levels ?? [r.level ?? 0, r.level ?? 0];
+    const level = low ? (high > low ? `Lv ${low}-${high}` : `Lv ${low}`) : '';
+    const variants = (r.variants ?? 1) > 1 ? `${r.variants} variants` : '';
+    return [level, variants, r.id].filter(Boolean).join(' - ');
+  }
+
   type Tab = 'props' | 'npcs' | 'maps' | 'characters' | 'items';
   const TABS: { id: Tab; label: string }[] = [
     { id: 'props', label: 'Props' },
@@ -266,8 +274,8 @@
             void insert();
           }}
           thumb={tab === 'maps' ? undefined : (r: ModelEntry) => previewUrlForModel(r.glb)}
-          detail={(r: ModelEntry & { level?: number; xblock?: string }) =>
-            tab === 'npcs' && r.level ? `Lv ${r.level} - ${r.id}` : tab === 'maps' ? `${r.id} - ${r.xblock ?? ''}` : r.id}
+          detail={(r: ModelEntry & { id?: string; level?: number; levels?: [number, number]; variants?: number; xblock?: string }) =>
+            tab === 'npcs' ? npcDetail(r) : tab === 'maps' ? `${r.id} - ${r.xblock ?? ''}` : (r.id ?? '')}
         />
       {/key}
     {:else if tab === 'items'}

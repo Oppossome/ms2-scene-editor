@@ -1,6 +1,7 @@
 <script lang="ts">
   import ContextMenu from './ContextMenu.svelte';
   import type { MenuItem, Studio } from './controller.svelte.js';
+  import { helpMenuItems } from './helpmenu.js';
   import { viewMenuItems } from './viewmenu.js';
 
   let { studio }: { studio: Studio } = $props();
@@ -10,10 +11,11 @@
   let fileButton = $state<HTMLButtonElement>();
   let fileInput = $state<HTMLInputElement>();
   let viewButton = $state<HTMLButtonElement>();
-  let open = $state<{ which: 'file' | 'view'; x: number; y: number } | null>(null);
+  let helpButton = $state<HTMLButtonElement>();
+  let open = $state<{ which: 'file' | 'view' | 'help'; x: number; y: number } | null>(null);
 
   /** Open a menu under its button, or close it when it is the one already open. */
-  function toggle(which: 'file' | 'view', button: HTMLButtonElement | undefined) {
+  function toggle(which: 'file' | 'view' | 'help', button: HTMLButtonElement | undefined) {
     if (open?.which === which) {
       open = null;
       return;
@@ -35,6 +37,8 @@
   ]);
 
   const viewItems = $derived(viewMenuItems(studio));
+  const helpItems = $derived(helpMenuItems(studio));
+  const menus = $derived({ file: fileItems, view: viewItems, help: helpItems });
 
   async function onFile(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
@@ -65,6 +69,15 @@
     aria-haspopup="menu"
     aria-expanded={open?.which === 'view'}>View</button
   >
+  <button
+    class="tab"
+    class:open={open?.which === 'help'}
+    bind:this={helpButton}
+    onpointerdown={(e) => e.stopPropagation()}
+    onclick={() => toggle('help', helpButton)}
+    aria-haspopup="menu"
+    aria-expanded={open?.which === 'help'}>Help</button
+  >
   <span class="sep"></span>
   <button class="icon" onclick={() => store.undo()} disabled={!store.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
@@ -77,7 +90,7 @@
 
 {#if open}
   {#key open.which}
-    <ContextMenu x={open.x} y={open.y} items={open.which === 'file' ? fileItems : viewItems} onclose={() => (open = null)} />
+    <ContextMenu x={open.x} y={open.y} items={menus[open.which]} onclose={() => (open = null)} />
   {/key}
 {/if}
 

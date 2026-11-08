@@ -11,13 +11,11 @@
     value: string;
     /** Called when a previewed clip is applied (Apply button or Enter). '' means no animation. */
     oncommit?: (name: string) => void;
-    /** Use an existing preview (the Toolbox pane's): a click plays the clip there and no canvas is shown here. */
-    preview?: PreviewController;
-    /** Without `preview`: what the picker's own small canvas shows; it plays previewed clips on it. */
+    /** What the picker's own small canvas shows; previewed clips play on it and nothing else is touched until Apply. */
     source?: PreviewSource | null;
   }
 
-  let { clips, value, oncommit, preview, source = null }: Props = $props();
+  let { clips, value, oncommit, source = null }: Props = $props();
 
   /** Most rows rendered at once; a long search result asks to be refined instead. */
   const MAX_ROWS = 300;
@@ -83,7 +81,7 @@
     query = '';
     const home = groupOf(groups, value);
     expanded = home ? { [home]: true } : {};
-    if (!preview && source) {
+    if (source) {
       const controller = new PreviewController();
       own = controller;
       const s = source;
@@ -96,9 +94,7 @@
     list?.querySelector('.current')?.scrollIntoView({ block: 'center' });
   }
 
-  /** Close the picker. Without `applied`, a clip previewed on a shared preview goes back to the one before. */
-  function closePicker(applied = false) {
-    if (!applied && preview && previewed !== null && previewed !== baseline) void preview.play(baseline);
+  function closePicker() {
     previewed = null;
     open = false;
     own?.dispose();
@@ -122,12 +118,12 @@
 
   function select(name: string) {
     previewed = name;
-    void (preview ?? own)?.play(name);
+    void own?.play(name);
   }
 
   function commit(name: string) {
     oncommit?.(name);
-    closePicker(true);
+    closePicker();
   }
 
   /** A click only previews; Apply (or Enter) uses the clip. */

@@ -1,5 +1,6 @@
 <script lang="ts" generics="T extends { id: string; name: string }">
   import { hideImage, moveRowFocus } from './listnav.js';
+  import { nearEnd } from './nearend.js';
 
   interface Props {
     /** API endpoint returning { total, items } for ?q=&offset=&limit= */
@@ -38,6 +39,12 @@
   let loading = $state(false);
   let error = $state('');
   let token = 0;
+  let list = $state<HTMLUListElement>();
+
+  /** The end of the list is near: fetch the next page, unless one is on its way or the last one failed. */
+  function more() {
+    if (!loading && !error) void fetchPage(false);
+  }
 
   async function fetchPage(reset: boolean) {
     const mine = ++token;
@@ -51,6 +58,7 @@
       if (mine !== token) return;
       records = reset ? page.items : [...records, ...page.items];
       total = page.total;
+      if (reset) list?.scrollTo({ top: 0 });
     } catch (e) {
       if (mine === token) error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -73,7 +81,7 @@
   <div class="count">{total.toLocaleString()} results</div>
   {#if error}<div class="error">{error}</div>{/if}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <ul {onkeydown}>
+  <ul {onkeydown} bind:this={list}>
     {#each records as record (record.id)}
       {@const src = thumb?.(record)}
       <li>
@@ -91,12 +99,14 @@
         </button>
       </li>
     {/each}
+    {#if records.length < total}
+      {#if error}
+        <li><button class="more" onclick={() => fetchPage(false)}>Retry</button></li>
+      {:else}
+        <li class="sentinel" aria-hidden="true" use:nearEnd={{ onnearend: more, state: [records.length, loading] }}>{loading ? 'Loading...' : ''}</li>
+      {/if}
+    {/if}
   </ul>
-  {#if records.length < total}
-    <button class="more" disabled={loading} onclick={() => fetchPage(false)}>
-      {loading ? 'Loading...' : 'Load more'}
-    </button>
-  {/if}
 </div>
 
 <style>
@@ -150,6 +160,13 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+  .sentinel {
+    padding: 8px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    min-height: 1px;
   }
   li button:hover,
   li button.selected {

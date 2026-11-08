@@ -67,4 +67,51 @@ export function searchByName<T extends { id: string; name: string }>(
   return paginate(matched, offset, limit);
 }
 
+/** One entry of the NPC list: the NPCs that share a name and a model (the game has one per level) shown once. */
+export interface NpcGroup extends NpcRecord {
+  /** How many NPC records the entry stands for. */
+  variants: number;
+  /** Lowest and highest level among them. */
+  levels: [number, number];
+}
+
+/**
+ * Group NPCs with the same name and the same model. The entry is the lowest-level one (then the lowest id), so the
+ * result does not depend on the order of the index; `ids` lists every id the entry stands for, for searching.
+ */
+export function groupNpcs(npcs: NpcRecord[]): { entry: NpcGroup; ids: string[] }[] {
+  const groups = new Map<string, NpcRecord[]>();
+  for (const npc of npcs) {
+    const key = `${npc.name}\0${npc.glb}`;
+    const list = groups.get(key);
+    if (list) list.push(npc);
+    else groups.set(key, [npc]);
+  }
+  return [...groups.values()].map((list) => {
+    const sorted = [...list].sort((a, b) => a.level - b.level || a.id.localeCompare(b.id));
+    const levels = sorted.map((n) => n.level);
+    return {
+      entry: { ...sorted[0], variants: list.length, levels: [Math.min(...levels), Math.max(...levels)] },
+      ids: sorted.map((n) => n.id)
+    };
+  });
+}
+
+/** Search the grouped NPC list by name or by the id of any NPC in a group. */
+export function searchNpcs(groups: { entry: NpcGroup; ids: string[] }[], q: string | null | undefined, offset = 0, limit = 60): Page<NpcGroup> {
+  const words = tokens(q);
+  const matched = words.length
+    ? groups.filter((g) => {
+        const hay = `${g.entry.name} ${g.ids.join(' ')}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      })
+    : groups.slice();
+  matched.sort((a, b) => a.entry.name.localeCompare(b.entry.name) || a.entry.id.localeCompare(b.entry.id));
+  return paginate(
+    matched.map((g) => g.entry),
+    offset,
+    limit
+  );
+}
+
 export type { ItemRecord, MapRecord, NpcRecord };

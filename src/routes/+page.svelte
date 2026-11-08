@@ -5,6 +5,7 @@
   import ContextMenu from '#lib/studio/ContextMenu.svelte';
   import { Studio } from '#lib/studio/controller.svelte.js';
   import Explorer from '#lib/studio/Explorer.svelte';
+  import AboutDialog from '#lib/studio/AboutDialog.svelte';
   import BackgroundPicker from '#lib/studio/BackgroundPicker.svelte';
   import MenuBar from '#lib/studio/MenuBar.svelte';
   import { parseView } from '#lib/scene/environment.js';
@@ -169,6 +170,10 @@
     </aside>
   </div>
 </div>
+
+{#if studio.showAbout}
+  <AboutDialog {studio} />
+{/if}
 
 {#if studio.pickingBackdrop}
   <BackgroundPicker {studio} />

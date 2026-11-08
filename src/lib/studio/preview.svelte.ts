@@ -37,6 +37,8 @@ export type PreviewSource =
  * `show` supersedes an older one (a late result is thrown away); `dispose` releases everything.
  */
 export class PreviewController {
+  /** What was last asked to be shown (null: nothing), so a clip picker can preview the same thing on its own. */
+  source = $state.raw<PreviewSource | null>(null);
   object = $state.raw<Object3D | null>(null);
   /** Bump to re-frame the camera. */
   frameToken = $state(0);
@@ -66,6 +68,7 @@ export class PreviewController {
   async show(source: PreviewSource | null) {
     const gen = ++this.gen;
     this.release();
+    this.source = source;
     if (!source) return;
     this.status = 'Loading...';
     try {

@@ -79,6 +79,8 @@ export class Studio {
   look = $state<ViewSettings>({ ...DEFAULT_VIEW });
   /** The backdrop picker is open. */
   pickingBackdrop = $state(false);
+  /** The About dialog is open. */
+  showAbout = $state(false);
   /** Toolbox (the left dock): shown or hidden. */
   toolboxOpen = $state(true);
   /** Bumped to ask the Toolbox to put the cursor in its search box. */

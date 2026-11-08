@@ -1,6 +1,7 @@
 <script lang="ts">
   import { iconUrl } from '#lib/assets/urls.js';
   import { moveRowFocus } from './listnav.js';
+  import { nearEnd } from './nearend.js';
   import { SLOT_ORDER, slotLabel } from '#lib/character/slots.js';
   import type { Gender, ItemRecord } from '#lib/types.js';
 
@@ -40,6 +41,12 @@
   let loading = $state(false);
   let error = $state('');
   let token = 0;
+  let list = $state<HTMLUListElement>();
+
+  /** The end of the list is near: fetch the next page, unless one is on its way or the last one failed. */
+  function more() {
+    if (!loading && !error) void fetchPage(false);
+  }
 
   async function fetchPage(reset: boolean) {
     const mine = ++token;
@@ -55,6 +62,7 @@
       if (mine !== token) return;
       items = reset ? page.items : [...items, ...page.items];
       total = page.total;
+      if (reset) list?.scrollTo({ top: 0 });
     } catch (e) {
       if (mine === token) error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -91,7 +99,7 @@
   {#if error}<div class="error">{error}</div>{/if}
 
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <ul {onkeydown}>
+  <ul {onkeydown} bind:this={list}>
     {#each items as item (item.id)}
       <li>
         <button
@@ -109,10 +117,14 @@
         </button>
       </li>
     {/each}
+    {#if items.length < total}
+      {#if error}
+        <li><button class="more" onclick={() => fetchPage(false)}>Retry</button></li>
+      {:else}
+        <li class="sentinel" aria-hidden="true" use:nearEnd={{ onnearend: more, state: [items.length, loading] }}>{loading ? 'Loading...' : ''}</li>
+      {/if}
+    {/if}
   </ul>
-  {#if items.length < total}
-    <button class="more" disabled={loading} onclick={() => fetchPage(false)}>{loading ? 'Loading...' : 'Load more'}</button>
-  {/if}
 </div>
 
 <style>
@@ -158,6 +170,13 @@
     border-radius: 0;
     background: transparent;
     padding: 4px 6px;
+  }
+  .sentinel {
+    padding: 8px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    min-height: 1px;
   }
   li button:hover {
     background: var(--panel-2);

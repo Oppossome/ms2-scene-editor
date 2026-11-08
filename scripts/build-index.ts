@@ -1,6 +1,6 @@
 /**
  * Builds the JSON indexes the app queries (items, npcs, maps, palettes, flat models) from the extracted game data.
- * Output: .data/*.json   Run with: npm run index
+ * Output: .data/*.json (or $MS2_DATA)   Run with: npm run index
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,7 @@ import type {
 } from '../src/lib/types.ts';
 
 const ROOT = path.resolve(process.env.MS2_EXTRACTED ?? 'extracted');
-const OUT = path.resolve('.data');
+const OUT = path.resolve(process.env.MS2_DATA ?? '.data');
 const warnings: Record<string, number> = {};
 const warn = (key: string) => (warnings[key] = (warnings[key] ?? 0) + 1);
 
