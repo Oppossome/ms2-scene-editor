@@ -81,6 +81,8 @@ export class Studio {
   pickingBackdrop = $state(false);
   /** The About dialog is open. */
   showAbout = $state(false);
+  /** The Report an issue dialog is open. */
+  showReportIssue = $state(false);
   /** Toolbox (the left dock): shown or hidden. */
   toolboxOpen = $state(true);
   /** Bumped to ask the Toolbox to put the cursor in its search box. */

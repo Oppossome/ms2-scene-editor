@@ -6,6 +6,7 @@
   import { Studio } from '#lib/studio/controller.svelte.js';
   import Explorer from '#lib/studio/Explorer.svelte';
   import AboutDialog from '#lib/studio/AboutDialog.svelte';
+  import ReportIssueDialog from '#lib/studio/ReportIssueDialog.svelte';
   import BackgroundPicker from '#lib/studio/BackgroundPicker.svelte';
   import MenuBar from '#lib/studio/MenuBar.svelte';
   import { parseView } from '#lib/scene/environment.js';
@@ -173,6 +174,10 @@
 
 {#if studio.showAbout}
   <AboutDialog {studio} />
+{/if}
+
+{#if studio.showReportIssue}
+  <ReportIssueDialog {studio} />
 {/if}
 
 {#if studio.pickingBackdrop}
