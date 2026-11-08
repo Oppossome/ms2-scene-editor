@@ -22,12 +22,12 @@ import { AnimationPlayer } from '../assets/animation.js';
 import { instantiate, loadClips } from '../assets/loader.js';
 import { embeddedClips, fetchBodyClips, idleClip } from '../assets/clips.js';
 import { bodyClipDir } from '../assets/urls.js';
-import { getItem, itemTint, skinTint } from '../character/build.js';
+import { eyeTint, getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig, type BoneInfo } from '../character/rig.js';
 import { exportGlb } from '../export/glb.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
 import type { ClipInfo, MapData } from '../types.js';
-import { DEFAULT_SKIN, type SceneNode } from './model.js';
+import { DEFAULT_EYE, DEFAULT_SKIN, FRAME_RATE, type SceneNode } from './model.js';
 import type { LocalTransform } from './store.svelte.js';
 import { descendantsOf, rootOf } from './tree.js';
 
@@ -52,10 +52,11 @@ interface View {
   content: Object3D | null;
   /** Characters: item reconciliation state. */
   itemSig: string;
-  itemColors: Map<string, number>;
+  itemColors: Map<string, string>;
   reconciling: boolean;
   dirty: boolean;
   skinApplied: number | undefined;
+  eyeApplied: number | undefined;
   clipRequested: string | undefined;
   link: ItemLink;
 }
@@ -66,7 +67,8 @@ export interface RuntimeHooks {
 }
 
 const contentKey = (n: SceneNode) => JSON.stringify([n.kind, n.glb, n.mapId, n.gender]);
-const itemSignature = (items: SceneNode[]) => items.map((i) => `${i.id}:${i.itemId}:${i.color ?? ''}`).join('|');
+const itemSignature = (items: SceneNode[]) =>
+  items.map((i) => `${i.id}:${i.itemId}:${i.color ?? ''}:${i.channelColors ? JSON.stringify(i.channelColors) : ''}`).join('|');
 
 /**
  * The three.js side of the scene. It mirrors the node tree into a real object graph (groups, loaded models,
@@ -229,6 +231,7 @@ export class SceneRuntime {
       reconciling: false,
       dirty: false,
       skinApplied: undefined,
+      eyeApplied: undefined,
       clipRequested: undefined,
       link: { bone: '' }
     };
@@ -244,9 +247,10 @@ export class SceneRuntime {
     }
     this.applyTransform(view.group, node);
     view.group.visible = node.visible;
-    if (view.rig && node.skin !== view.skinApplied) void this.applySkin(view);
+    if (view.rig && (node.skin !== view.skinApplied || node.eye !== view.eyeApplied)) void this.applySkin(view);
     if (view.player) view.player.mixer.timeScale = node.speed ?? 1;
     if (!prev || prev.clip !== node.clip) void this.playClip(view);
+    else if (prev.freeze !== node.freeze) this.applyFreeze(view);
   }
 
   private applyTransform(object: Object3D, node: SceneNode) {
@@ -295,6 +299,7 @@ export class SceneRuntime {
     view.content = null;
     view.embedded = [];
     view.skinApplied = undefined;
+    view.eyeApplied = undefined;
     view.clipRequested = undefined;
     view.itemSig = '';
     view.itemColors.clear();
@@ -322,10 +327,15 @@ export class SceneRuntime {
     try {
       let clips: ClipInfo[] = [];
       if (node.kind === 'character') {
-        const rig = await CharacterRig.create(node.gender ?? 1, await skinTint(node.skin ?? DEFAULT_SKIN));
+        const rig = await CharacterRig.create(
+          node.gender ?? 1,
+          await skinTint(node.skin ?? DEFAULT_SKIN),
+          await eyeTint(node.eye ?? DEFAULT_EYE)
+        );
         if (gen !== view.gen) return rig.dispose();
         view.rig = rig;
         view.skinApplied = node.skin;
+        view.eyeApplied = node.eye;
         view.content = rig.root;
         view.group.add(rig.root);
         view.player = new AnimationPlayer(rig.root);
@@ -367,11 +377,14 @@ export class SceneRuntime {
 
   private async applySkin(view: View) {
     const rig = view.rig;
-    const skin = view.node.skin;
+    const { skin, eye } = view.node;
     if (!rig) return;
     view.skinApplied = skin;
-    const colors = await skinTint(skin ?? DEFAULT_SKIN);
-    if (colors && view.rig === rig) rig.setSkinColors(colors);
+    view.eyeApplied = eye;
+    const [skinColors, eyeColors] = await Promise.all([skinTint(skin ?? DEFAULT_SKIN), eyeTint(eye ?? DEFAULT_EYE)]);
+    if (view.rig !== rig) return;
+    if (skinColors) rig.setSkinColors(skinColors);
+    if (eyeColors) rig.setEyeColors(eyeColors);
   }
 
   private async playClip(view: View) {
@@ -387,6 +400,21 @@ export class SceneRuntime {
       const clip = view.embedded.find((c) => c.name === name);
       if (clip) player.play(clip, true);
     }
+    if (view.player === player) this.applyFreeze(view);
+  }
+
+  /** Hold the clip on the node's freeze frame, or let it play again. */
+  private applyFreeze(view: View) {
+    const player = view.player;
+    if (!player?.clip) return;
+    const frame = view.node.freeze;
+    if (frame === undefined) player.unfreeze();
+    else player.freeze(frame / FRAME_RATE);
+  }
+
+  /** The frame a node's animation is on now (0 when nothing plays), to freeze it there. */
+  currentFrame(id: string): number {
+    return Math.round((this.views.get(id)?.player?.time ?? 0) * FRAME_RATE);
   }
 
   // ----- characters and their items -------------------------------------------------------------------------
@@ -455,12 +483,12 @@ export class SceneRuntime {
     for (const node of desired) {
       if (gen !== view.gen || view.disposed) return;
       const id = node.itemId!;
-      const colorKey = node.color ?? -1;
+      const colorKey = `${node.color ?? -1}:${node.channelColors ? JSON.stringify(node.channelColors) : ''}`;
       const worn = rig.isEquipped(id);
       if (worn && view.itemColors.get(id) === colorKey) continue;
       const record = await getItem(id);
       if (!record) continue;
-      const colors = await itemTint(record, node.color);
+      const colors = await itemTint(record, node.color, node.channelColors);
       if (gen !== view.gen || view.disposed) return;
       try {
         if (worn) {

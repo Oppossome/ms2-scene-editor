@@ -75,6 +75,44 @@ describe('SceneState equipItem', () => {
   });
 });
 
+describe('SceneState character eyes', () => {
+  it('gives characters the default eye colour unless one is given', () => {
+    const s = new SceneState();
+    const a = s.addCharacter({ name: 'A', gender: 1 });
+    const b = s.addCharacter({ name: 'B', gender: 0, eye: 9 });
+    expect(s.node(a)?.eye).toBe(5);
+    expect(s.node(b)?.eye).toBe(9);
+  });
+});
+
+describe('SceneState per-channel colours', () => {
+  it('stores picks on the item node and replaces them with the item', () => {
+    const { s, hero } = sceneWithHero();
+    s.equipItem(hero, { ...item('1', ['CP']), color: 2, channelColors: { ch0: 4, ch2: 7 } });
+    const hat = s.nodes.find((n) => n.itemId === '1')!;
+    expect(hat).toMatchObject({ color: 2, channelColors: { ch0: 4, ch2: 7 } });
+    s.equipItem(hero, item('1', ['CP']));
+    expect(s.nodes.find((n) => n.itemId === '1')?.channelColors).toBeUndefined();
+  });
+
+  it('leaves out empty picks and survives duplicating the character', () => {
+    const { s, hero } = sceneWithHero();
+    s.equipItem(hero, { ...item('9', ['GL']), channelColors: {} });
+    expect(s.nodes.find((n) => n.itemId === '9')?.channelColors).toBeUndefined();
+    s.equipItem(hero, { ...item('10', ['SH']), channelColors: { ch2: 3 } });
+    const copy = s.duplicate(hero)!;
+    expect(s.nodes.find((n) => n.parentId === copy && n.itemId === '10')?.channelColors).toEqual({ ch2: 3 });
+  });
+
+  it('setOutfit and addCharacter carry the picks', () => {
+    const s = new SceneState();
+    const id = s.addCharacter({ name: 'A', gender: 1 }, [{ ...item('1', ['CP']), channelColors: { ch0: 1 } }]);
+    expect(s.nodes.find((n) => n.parentId === id)?.channelColors).toEqual({ ch0: 1 });
+    s.setOutfit(id, [{ ...item('2', ['CL']), channelColors: { ch2: 2 } }]);
+    expect(s.nodes.find((n) => n.parentId === id)?.channelColors).toEqual({ ch2: 2 });
+  });
+});
+
 describe('SceneState remove, duplicate, group', () => {
   it('removes a node with its subtree and fixes the selection', () => {
     const { s, hero } = sceneWithHero();

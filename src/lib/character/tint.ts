@@ -30,6 +30,42 @@ export function paletteToTint(color: PaletteColor): TintColors {
 }
 
 /**
+ * Palette rows the player picked per channel (indexes into the palette, i.e. `colorSN`). A channel without an entry
+ * follows the item's base row; `ch0` is the main colour and `ch2` the detail/shade colour. The accent `ch1` is not
+ * pickable (no item allows it), so it always comes from the base row.
+ */
+export interface ChannelIndexes {
+  ch0?: number;
+  ch2?: number;
+}
+
+export const CHANNEL_KEYS = ['ch0', 'ch2'] as const;
+export type ChannelKey = (typeof CHANNEL_KEYS)[number];
+
+/** Validate untrusted JSON into channel picks; null when it holds nothing usable. */
+export function parseChannelIndexes(value: unknown): ChannelIndexes | null {
+  if (!value || typeof value !== 'object') return null;
+  const out: ChannelIndexes = {};
+  for (const key of CHANNEL_KEYS) {
+    const v = (value as Record<string, unknown>)[key];
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 0) out[key] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * The three tint colours for a palette: every channel takes its colour from the base row, except those the player
+ * picked another row for (that row's colour *for that channel*). Unknown rows fall back to the base row, then row 0.
+ */
+export function tintFromPalette(palette: PaletteColor[], base: number, picks?: ChannelIndexes | null): TintColors | undefined {
+  const row = (i: number | undefined) => (i === undefined ? undefined : palette[i]);
+  const fallback = row(base) ?? palette[0];
+  if (!fallback) return undefined;
+  const colour = (key: ChannelKey) => argbToColor((row(picks?.[key]) ?? fallback)[key]);
+  return { c0: colour('ch0'), c1: argbToColor(fallback.ch1), c2: colour('ch2') };
+}
+
+/**
  * Whether a colour-mask texture belongs to the body's skin (the skin parts of clothes, `CL_Skin`, `SH_Skin`...,
  * use the body masks `m_body_c.png` / `f_skin_body_c.png`). Those regions take the character's skin colours, not
  * the colours chosen for the item.
@@ -44,27 +80,35 @@ export function isSkinMask(uri: string): boolean {
   return /^(m|f)_(skin_)?body_c\.png$/i.test(name);
 }
 
-/** Constants shared by the shader and the CPU bake so both produce the same colours. */
-export const TINT = { gain: 2.2, coverageBoost: 1.8, amount: 1 };
-
 type Rgb = [number, number, number];
 
+/** [red, green, blue, alpha] of a colour-mask pixel, 0..1. */
+export type MaskPixel = [number, number, number, number];
+
+const toGamma = (c: number) => {
+  const v = Math.min(Math.max(c, 0), 1);
+  return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+};
+const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+
 /**
- * CPU version of the tint shader for one pixel. `base` is the linear diffuse colour (texture times material colour),
- * `mask` the raw 0..1 mask channels, and `t0..t2` the linear palette colours.
+ * CPU version of the tint shader for one pixel; the game's character shaders (`MS2CharacterMaterial`, `...Hair...`,
+ * `...Skin...`) do exactly this, in gamma space:
+ *
+ *   tint   = R * OverrideColor0 + G * OverrideColor1 + (1 - R) * OverrideColor2
+ *   albedo = lerp(base, tint, mask.alpha)
+ *
+ * The mask's alpha is the tinted region, R grades between the main colour (ch0) and the shade colour (ch2) and G adds
+ * the accent colour (ch1); blue is not read. `base` and `t0..t2` are linear colours (a material colour factor is
+ * expected to be applied to both already), the result is linear too.
  */
-export function tintPixel(base: Rgb, mask: Rgb, t0: Rgb, t1: Rgb, t2: Rgb): Rgb {
-  const neutral = Math.min(mask[0], mask[1], mask[2]);
-  const w: Rgb = [mask[0] - neutral, mask[1] - neutral, mask[2] - neutral];
-  const coverage = Math.min(Math.max(Math.max(w[0], w[1], w[2]) * TINT.coverageBoost, 0), 1);
-  const total = Math.max(w[0] + w[1] + w[2], 1e-4);
-  const lum = 0.2126 * base[0] + 0.7152 * base[1] + 0.0722 * base[2];
-  const level = Math.min(Math.max(lum * TINT.gain, 0), 1.5);
-  const k = coverage * TINT.amount;
+export function tintPixel(base: Rgb, mask: MaskPixel, t0: Rgb, t1: Rgb, t2: Rgb): Rgb {
+  const [r, g, , a] = mask;
   const out: Rgb = [0, 0, 0];
   for (let i = 0; i < 3; i++) {
-    const target = (w[0] * t0[i] + w[1] * t1[i] + w[2] * t2[i]) / total;
-    out[i] = base[i] + (target * level - base[i]) * k;
+    const tint = r * toGamma(t0[i]) + g * toGamma(t1[i]) + (1 - r) * toGamma(t2[i]);
+    const b = toGamma(base[i]);
+    out[i] = toLinear(b + (tint - b) * a);
   }
   return out;
 }
@@ -104,23 +148,30 @@ function loadMask(url: string): Promise<Texture> {
   return hit;
 }
 
-/**
- * Mask channels (R, G, B) select the tint regions ch0/ch1/ch2; where all three are equal the surface is left alone.
- * Tinted regions keep the base texture's lightness and take the palette colour.
- */
+/** Same maths as `tintPixel`; the colours are converted to gamma space and back like the game does everything in it. */
+const COMMON_PATCH = /* glsl */ `
+#include <common>
+uniform sampler2D tintMask;
+uniform vec3 tint0;
+uniform vec3 tint1;
+uniform vec3 tint2;
+vec3 tintToGamma(vec3 c) {
+  c = clamp(c, 0.0, 1.0);
+  return mix(pow(c, vec3(1.0 / 2.4)) * 1.055 - 0.055, c * 12.92, step(c, vec3(0.0031308)));
+}
+vec3 tintToLinear(vec3 c) {
+  return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, step(c, vec3(0.04045)));
+}
+`;
+
 const FRAGMENT_PATCH = /* glsl */ `
 #include <map_fragment>
 #ifdef USE_MAP
 {
-  vec3 m = texture2D(tintMask, vMapUv).rgb;
-  float neutral = min(min(m.r, m.g), m.b);
-  vec3 w = m - vec3(neutral);
-  float coverage = clamp(max(w.r, max(w.g, w.b)) * ${TINT.coverageBoost.toFixed(2)}, 0.0, 1.0);
-  float total = max(w.r + w.g + w.b, 1e-4);
-  vec3 target = (w.r * tint0 + w.g * tint1 + w.b * tint2) / total;
-  float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-  vec3 tinted = target * clamp(lum * tintGain, 0.0, 1.5);
-  diffuseColor.rgb = mix(diffuseColor.rgb, tinted, coverage * tintAmount);
+  vec4 m = texture2D(tintMask, vMapUv);
+  vec3 tintGamma = m.r * tintToGamma(tint0) + m.g * tintToGamma(tint1) + (1.0 - m.r) * tintToGamma(tint2);
+  vec3 tinted = tintToGamma(tintToLinear(tintGamma) * diffuse);
+  diffuseColor.rgb = tintToLinear(mix(tintToGamma(diffuseColor.rgb), tinted, m.a));
 }
 #endif
 `;
@@ -129,16 +180,12 @@ interface UniformSet {
   tint0: { value: Color };
   tint1: { value: Color };
   tint2: { value: Color };
-  tintGain: { value: number };
-  tintAmount: { value: number };
 }
 
 const uniformsFor = (colors: TintColors): UniformSet => ({
   tint0: { value: colors.c0.clone() },
   tint1: { value: colors.c1.clone() },
-  tint2: { value: colors.c2.clone() },
-  tintGain: { value: TINT.gain },
-  tintAmount: { value: TINT.amount }
+  tint2: { value: colors.c2.clone() }
 });
 
 const setUniforms = (u: UniformSet, c: TintColors) => {
@@ -187,10 +234,7 @@ export async function applyTint(
         shader.uniforms.tintMask = { value: mask };
         Object.assign(shader.uniforms, uniforms);
         shader.fragmentShader = shader.fragmentShader
-          .replace(
-            '#include <common>',
-            '#include <common>\nuniform sampler2D tintMask;\nuniform vec3 tint0;\nuniform vec3 tint1;\nuniform vec3 tint2;\nuniform float tintGain;\nuniform float tintAmount;'
-          )
+          .replace('#include <common>', COMMON_PATCH)
           .replace('#include <map_fragment>', FRAGMENT_PATCH);
       };
       tintInfo.set(material, {

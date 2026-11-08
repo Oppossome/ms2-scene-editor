@@ -1,11 +1,12 @@
 import { CanvasTexture, SRGBColorSpace, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
-import { getTintInfo, tintPixel } from '../character/tint.js';
+import { getTintInfo, tintPixel, type MaskPixel } from '../character/tint.js';
 
 const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const toSrgb = (c: number) => {
   const v = Math.min(Math.max(c, 0), 1);
   return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
 };
+type Rgb = [number, number, number];
 
 type Drawable = CanvasImageSource & { width: number; height: number };
 
@@ -28,23 +29,27 @@ export function bakeTintedMaterial(material: MeshStandardMaterial): MeshStandard
   const mask = info?.mask.image as Drawable | undefined;
   if (!info || !base || !mask) return null;
 
-  const { width, height } = base;
+  // The base and the mask can differ in size (a flat colour base is tiny), the larger one carries the detail.
+  const width = Math.max(base.width, mask.width);
+  const height = Math.max(base.height, mask.height);
   const basePixels = readPixels(base, width, height);
   const maskPixels = readPixels(mask, width, height);
   const { c0, c1, c2 } = info.colors();
-  const t0: [number, number, number] = [c0.r, c0.g, c0.b];
-  const t1: [number, number, number] = [c1.r, c1.g, c1.b];
-  const t2: [number, number, number] = [c2.r, c2.g, c2.b];
   const factor = material.color;
+  // The material colour multiplies the tint as well as the texture, as in the shader.
+  const scaled = (c: { r: number; g: number; b: number }): Rgb => [c.r * factor.r, c.g * factor.g, c.b * factor.b];
+  const t0 = scaled(c0);
+  const t1 = scaled(c1);
+  const t2 = scaled(c2);
 
   const out = new ImageData(width, height);
   for (let i = 0; i < basePixels.length; i += 4) {
-    const linear: [number, number, number] = [
+    const linear: Rgb = [
       toLinear(basePixels[i] / 255) * factor.r,
       toLinear(basePixels[i + 1] / 255) * factor.g,
       toLinear(basePixels[i + 2] / 255) * factor.b
     ];
-    const m: [number, number, number] = [maskPixels[i] / 255, maskPixels[i + 1] / 255, maskPixels[i + 2] / 255];
+    const m: MaskPixel = [maskPixels[i] / 255, maskPixels[i + 1] / 255, maskPixels[i + 2] / 255, maskPixels[i + 3] / 255];
     const result = tintPixel(linear, m, t0, t1, t2);
     out.data[i] = toSrgb(result[0]) * 255;
     out.data[i + 1] = toSrgb(result[1]) * 255;

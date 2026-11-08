@@ -1,3 +1,4 @@
+import { parseChannelIndexes, type ChannelIndexes } from '../character/tint.js';
 import type { OutfitSnapshot } from '../stores/outfits.js';
 
 /**
@@ -29,13 +30,19 @@ export interface SceneNode {
   gender?: 0 | 1;
   /** Skin palette colour index of a character. */
   skin?: number;
+  /** Eye colour (palette 3 index) of a character's own face. */
+  eye?: number;
   /** Item id and palette colour (items). `slots` lets the data layer resolve slot conflicts without a lookup. */
   itemId?: string;
   color?: number;
+  /** Palette rows picked per colour channel (main/accent/detail); channels not listed follow `color`. */
+  channelColors?: ChannelIndexes;
   slots?: string[];
   /** Animation clip to loop (NPC clip name, or a body clip name for characters) and its speed. */
   clip?: string;
   speed?: number;
+  /** Frame (at `FRAME_RATE`) the animation is held on; undefined while it plays. */
+  freeze?: number;
 }
 
 export interface SceneData {
@@ -44,7 +51,10 @@ export interface SceneData {
 }
 
 export const SCENE_KEY = 'bs2.scene.current';
+/** Frames per second the clips are sampled at, so a frame number maps to a time. */
+export const FRAME_RATE = 30;
 export const DEFAULT_SKIN = 2;
+export const DEFAULT_EYE = 5;
 
 let counter = 0;
 export function newId(): string {
@@ -89,10 +99,13 @@ function parseNode(raw: unknown): SceneNode | null {
     if (o.gender !== 0 && o.gender !== 1) return null;
     node.gender = o.gender;
     node.skin = isNum(o.skin) && Number.isInteger(o.skin) && o.skin >= 0 ? o.skin : DEFAULT_SKIN;
+    node.eye = isNum(o.eye) && Number.isInteger(o.eye) && o.eye >= 0 ? o.eye : DEFAULT_EYE;
   } else if (kind === 'item') {
     if (typeof o.itemId !== 'string' || !/^\d+$/.test(o.itemId)) return null;
     node.itemId = o.itemId;
     if (isNum(o.color) && Number.isInteger(o.color) && o.color >= 0) node.color = o.color;
+    const channelColors = parseChannelIndexes(o.channelColors);
+    if (channelColors) node.channelColors = channelColors;
     node.slots = Array.isArray(o.slots) ? o.slots.filter((s): s is string => typeof s === 'string' && !!s) : [];
   } else if (kind === 'map') {
     if (typeof o.mapId !== 'string' || !/^\d+$/.test(o.mapId)) return null;
@@ -105,6 +118,7 @@ function parseNode(raw: unknown): SceneNode | null {
   const clip = str(o.clip);
   if (clip) node.clip = clip;
   if (isNum(o.speed) && o.speed > 0) node.speed = o.speed;
+  if (isNum(o.freeze) && Number.isInteger(o.freeze) && o.freeze >= 0) node.freeze = o.freeze;
   return node;
 }
 
@@ -173,9 +187,14 @@ export function nodesToOutfit(nodes: SceneNode[], characterId: string): OutfitSn
     version: 1,
     gender: character.gender ?? 1,
     skin: character.skin ?? DEFAULT_SKIN,
+    eye: character.eye ?? DEFAULT_EYE,
     items: nodes
       .filter((n) => n.parentId === characterId && n.kind === 'item' && n.itemId)
-      .map((n) => ({ id: n.itemId!, ...(n.color !== undefined ? { color: n.color } : {}) }))
+      .map((n) => ({
+        id: n.itemId!,
+        ...(n.color !== undefined ? { color: n.color } : {}),
+        ...(n.channelColors ? { channels: n.channelColors } : {})
+      }))
   };
 }
 

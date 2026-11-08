@@ -1,8 +1,14 @@
 <script lang="ts">
   import { getPalette } from '#lib/character/build.js';
+  import type { PickChannel } from '#lib/scene/properties.js';
   import type { PaletteColor } from '#lib/types.js';
 
-  let { palette, value, onpick }: { palette: number; value: number; onpick: (index: number) => void } = $props();
+  let {
+    palette,
+    value,
+    channel,
+    onpick
+  }: { palette: number; value: number; channel?: PickChannel; onpick: (index: number) => void } = $props();
 
   let colors = $state.raw<PaletteColor[]>([]);
 
@@ -13,7 +19,11 @@
     });
   });
 
-  const css = (c: PaletteColor) => '#' + (palette === 1 ? c.ch0 : c.palette || c.ch0).replace(/^0x/i, '').slice(-6);
+  /** Swatch colour: the colour of one channel, or the row's display colour (the body palette shows its main colour). */
+  const css = (c: PaletteColor) => {
+    const argb = channel !== undefined ? c[`ch${channel}` as const] : palette === 1 ? c.ch0 : c.palette || c.ch0;
+    return '#' + argb.replace(/^0x/i, '').slice(-6);
+  };
 </script>
 
 <div class="swatches">

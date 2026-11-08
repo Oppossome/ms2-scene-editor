@@ -65,6 +65,8 @@ export class CharacterRig {
   private skinTint: TintHandle | null = null;
   /** The skin colours in effect: worn items' skin regions (CL_Skin, SH_Skin...) follow them. */
   private skinColors: TintColors | null = null;
+  /** The eye colours in effect (the face's iris regions); without any the whole body follows the skin. */
+  private eyeColors: TintColors | null = null;
 
   private constructor(gender: 0 | 1, body: Object3D) {
     this.gender = gender;
@@ -80,20 +82,24 @@ export class CharacterRig {
     });
   }
 
-  static async create(gender: 0 | 1, skin?: TintColors): Promise<CharacterRig> {
+  /** `skin` colours the body's skin masks; the face's other mask (the irises) takes `eye`, or the skin without one. */
+  static async create(gender: 0 | 1, skin?: TintColors, eye?: TintColors): Promise<CharacterRig> {
     const { object } = await instantiate(bodyModel(gender));
     const rig = new CharacterRig(gender, object);
-    if (skin) {
-      rig.skinColors = skin;
-      // The body is all skin: its own masks and the face take the skin colours.
-      rig.skinTint = await applyTint(object, bodyModel(gender), skin, skin);
-    }
+    if (skin) rig.skinColors = skin;
+    if (eye) rig.eyeColors = eye;
+    if (skin || eye) rig.skinTint = await applyTint(object, bodyModel(gender), eye ?? skin ?? null, skin ?? null);
     return rig;
+  }
+
+  setEyeColors(colors: TintColors) {
+    this.eyeColors = colors;
+    this.skinTint?.setColors(colors);
   }
 
   setSkinColors(colors: TintColors) {
     this.skinColors = colors;
-    this.skinTint?.setColors(colors);
+    if (!this.eyeColors) this.skinTint?.setColors(colors);
     this.skinTint?.setSkinColors(colors);
     for (const eq of this.equipped.values()) for (const tint of eq.tints) tint.setSkinColors(colors);
   }

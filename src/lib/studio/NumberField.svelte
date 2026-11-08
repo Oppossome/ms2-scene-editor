@@ -4,6 +4,7 @@
     step = 1,
     label = '',
     min,
+    max,
     disabled = false,
     onstart,
     onchange
@@ -12,6 +13,7 @@
     step?: number;
     label?: string;
     min?: number;
+    max?: number;
     disabled?: boolean;
     /** Called once before an edit begins (typing or the start of a drag), e.g. to record undo history. */
     onstart?: () => void;
@@ -19,7 +21,10 @@
   } = $props();
 
   const clean = (n: number) => Math.round(n * 1000) / 1000;
-  const clamp = (n: number) => (min !== undefined ? Math.max(min, n) : n);
+  const clamp = (n: number) => {
+    const low = min !== undefined ? Math.max(min, n) : n;
+    return max !== undefined ? Math.min(max, low) : low;
+  };
 
   let drag: { x: number; start: number; moved: boolean } | null = null;
 
@@ -53,6 +58,7 @@
     type="number"
     {step}
     {min}
+    {max}
     {disabled}
     value={clean(value)}
     onchange={(e) => {

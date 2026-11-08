@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { dropSkeletonRoots, editGlbJson, safeFilename } from '../export/glb';
-import { isSkinMask, TINT, tintPixel } from './tint';
+import { Color } from 'three';
+import {
+  isSkinMask,
+  parseChannelIndexes,
+  tintFromPalette,
+  tintPixel
+} from './tint';
+import type { PaletteColor } from '../types';
 
 const white: [number, number, number] = [1, 1, 1];
 const grey: [number, number, number] = [0.3, 0.3, 0.3];
@@ -25,34 +32,44 @@ describe('isSkinMask', () => {
   });
 });
 
+const gamma = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+
+// The game's shader: tint = R*C0 + G*C1 + (1-R)*C2 and albedo = lerp(base, tint, alpha), in gamma space.
 describe('tintPixel', () => {
-  it('leaves untinted (neutral mask) pixels alone', () => {
-    expect(tintPixel(grey, white, red, green, blue)).toEqual(grey);
-    expect(tintPixel(grey, [0.5, 0.5, 0.5], red, green, blue)).toEqual(grey);
+  it('leaves pixels with no mask alpha alone, whatever the mask colour', () => {
+    const out = tintPixel(grey, [1, 1, 0, 0], red, green, blue);
+    out.forEach((v, i) => expect(v).toBeCloseTo(grey[i], 5));
   });
 
-  it('replaces the colour in a fully masked channel, keeping the base lightness', () => {
-    const out = tintPixel(grey, [1, 0, 0], red, green, blue);
-    const level = Math.min(0.3 * TINT.gain, 1.5);
-    expect(out[0]).toBeCloseTo(red[0] * level, 5);
-    expect(out[1]).toBeCloseTo(red[1] * level, 5);
-    // the tint is brighter for a brighter base
-    const brighter = tintPixel([0.5, 0.5, 0.5], [1, 0, 0], red, green, blue);
-    expect(brighter[0]).toBeGreaterThan(out[0]);
+  it('replaces the base with the tint where the alpha is 1 (the base hue does not show through)', () => {
+    const base: [number, number, number] = [0.3, 0.02, 0.02];
+    const out = tintPixel(base, [1, 0, 0, 1], blue, green, red);
+    out.forEach((v, i) => expect(v).toBeCloseTo(blue[i], 5));
   });
 
-  it('uses the colour of the channel the mask selects', () => {
-    const g = tintPixel(grey, [0, 1, 0], red, green, blue);
-    expect(g[1]).toBeGreaterThan(g[0]);
-    const b = tintPixel(grey, [0, 0, 1], red, green, blue);
-    expect(b[2]).toBeGreaterThan(b[0]);
+  it('grades between the main colour (red channel 1) and the shade colour (red channel 0)', () => {
+    const main = tintPixel(white, [1, 0, 0, 1], red, green, blue);
+    const shade = tintPixel(white, [0, 0, 0, 1], red, green, blue);
+    main.forEach((v, i) => expect(v).toBeCloseTo(red[i], 5));
+    shade.forEach((v, i) => expect(v).toBeCloseTo(blue[i], 5));
+    const mid = tintPixel(white, [0.5, 0, 0, 1], red, green, blue);
+    expect(mid[0]).toBeCloseTo(linear(0.5 * gamma(red[0]) + 0.5 * gamma(blue[0])), 5);
   });
 
-  it('blends partially covered pixels between the base and the tint', () => {
-    const half = tintPixel(grey, [0.2, 0, 0], red, green, blue);
-    const full = tintPixel(grey, [1, 0, 0], red, green, blue);
-    expect(half[0]).toBeGreaterThan(grey[0]);
-    expect(half[0]).toBeLessThan(full[0]);
+  it('adds the accent colour with the green channel', () => {
+    const out = tintPixel(white, [0, 1, 0, 1], red, green, blue);
+    // R = 0 puts the shade colour in as well: tint = G*C1 + C2 (not clamped before lighting, like the game)
+    expect(out[1]).toBeCloseTo(linear(gamma(green[1]) + gamma(blue[1])), 5);
+  });
+
+  it('does not read the blue channel', () => {
+    expect(tintPixel(grey, [0.4, 0.2, 0, 1], red, green, blue)).toEqual(tintPixel(grey, [0.4, 0.2, 1, 1], red, green, blue));
+  });
+
+  it('blends partial alpha between the base and the tint in gamma space', () => {
+    const half = tintPixel(grey, [1, 0, 0, 0.5], red, green, blue);
+    expect(half[0]).toBeCloseTo(linear(0.5 * gamma(grey[0]) + 0.5 * gamma(red[0])), 5);
   });
 });
 
@@ -113,5 +130,38 @@ describe('GLB json editing', () => {
 
   it('rejects non-GLB data', () => {
     expect(() => editGlbJson(new ArrayBuffer(32), () => undefined)).toThrow('Not a GLB');
+  });
+});
+
+const row = (sn: number, ch0: string, ch1: string, ch2: string): PaletteColor => ({ sn, ch0, ch1, ch2, palette: ch0 });
+const palette = [row(0, '0xffaa0000', '0xff00aa00', '0xff0000aa'), row(1, '0xffffffff', '0xff111111', '0xff222222'), row(2, '0xff010203', '0xff040506', '0xff070809')];
+const hex = (c: Color) => c.getHexString();
+
+describe('tintFromPalette', () => {
+  it('takes all three channels from the base row', () => {
+    const c = tintFromPalette(palette, 1)!;
+    expect([hex(c.c0), hex(c.c1), hex(c.c2)]).toEqual(['ffffff', '111111', '222222']);
+  });
+
+  it('takes a picked channel from the picked row, using that row\'s colour for that channel', () => {
+    const c = tintFromPalette(palette, 0, { ch0: 1, ch2: 2 })!;
+    expect([hex(c.c0), hex(c.c1), hex(c.c2)]).toEqual(['ffffff', '00aa00', '070809']);
+  });
+
+  it('falls back for unknown rows: the base row, then row 0', () => {
+    expect(hex(tintFromPalette(palette, 1, { ch0: 99 })!.c0)).toBe('ffffff');
+    expect(hex(tintFromPalette(palette, 42)!.c0)).toBe('aa0000');
+    expect(tintFromPalette([], 0)).toBeUndefined();
+  });
+});
+
+describe('parseChannelIndexes', () => {
+  it('keeps valid picks only', () => {
+    expect(parseChannelIndexes({ ch0: 3, ch2: 0, ch1: -1, extra: 5 })).toEqual({ ch0: 3, ch2: 0 });
+    expect(parseChannelIndexes({ ch0: 1.5, ch1: '2' })).toBeNull();
+    expect(parseChannelIndexes({ ch1: 2 })).toBeNull();
+    expect(parseChannelIndexes(null)).toBeNull();
+    expect(parseChannelIndexes('x')).toBeNull();
+    expect(parseChannelIndexes({})).toBeNull();
   });
 });

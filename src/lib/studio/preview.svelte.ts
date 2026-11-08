@@ -3,24 +3,33 @@ import { AnimationPlayer } from '../assets/animation.js';
 import { embeddedClips, fetchBodyClips, idleClip } from '../assets/clips.js';
 import { instantiate, loadClips } from '../assets/loader.js';
 import { bodyClipDir } from '../assets/urls.js';
-import { getItem, itemTint, skinTint } from '../character/build.js';
+import { eyeTint, getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig } from '../character/rig.js';
+import type { ChannelIndexes } from '../character/tint.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
-import { DEFAULT_SKIN } from '../scene/model.js';
+import { DEFAULT_EYE, DEFAULT_SKIN } from '../scene/model.js';
 import type { ClipInfo, ItemRecord, MapData } from '../types.js';
+
+/** An item to wear in a preview: its palette row and optional per-channel picks. */
+export interface PreviewItem {
+  id: string;
+  color?: number;
+  channels?: ChannelIndexes;
+}
 
 /** What the preview pane shows. */
 export type PreviewSource =
   | { kind: 'model'; glb: string; scale?: number; clip?: string }
   | { kind: 'map'; id: string }
-  | { kind: 'character'; gender: 0 | 1; skin?: number; items: { id: string; color?: number }[]; clip?: string }
+  | { kind: 'character'; gender: 0 | 1; skin?: number; eye?: number; items: PreviewItem[]; clip?: string }
   | {
       kind: 'item';
       item: ItemRecord;
       gender: 0 | 1;
       color?: number;
-      /** The character the item is tried on (its skin and what it already wears); a bare body when omitted. */
-      base?: { skin: number; items: { id: string; color?: number }[] };
+      channels?: ChannelIndexes;
+      /** The character the item is tried on (its skin, eyes and what it already wears); a bare body when omitted. */
+      base?: { skin: number; eye?: number; items: PreviewItem[] };
     };
 
 /**
@@ -126,7 +135,7 @@ export class PreviewController {
   }
 
   private async showCharacter(s: Extract<PreviewSource, { kind: 'character' }>, gen: number) {
-    const rig = await CharacterRig.create(s.gender, await skinTint(s.skin ?? DEFAULT_SKIN));
+    const rig = await CharacterRig.create(s.gender, await skinTint(s.skin ?? DEFAULT_SKIN), await eyeTint(s.eye ?? DEFAULT_EYE));
     if (gen !== this.gen) return rig.dispose();
     this.attachRig(rig, s.gender);
     this.frameToken++;
@@ -136,19 +145,23 @@ export class PreviewController {
   }
 
   /** Put items on a rig in order; false when a newer `show` took over meanwhile. */
-  private async wear(rig: CharacterRig, items: { id: string; color?: number }[], gen: number): Promise<boolean> {
+  private async wear(rig: CharacterRig, items: PreviewItem[], gen: number): Promise<boolean> {
     const records = await Promise.all(items.map((i) => getItem(i.id)));
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
       if (!record) continue;
       if (gen !== this.gen) return false;
-      await rig.equip(record, await itemTint(record, items[i].color)).catch(() => undefined);
+      await rig.equip(record, await itemTint(record, items[i].color, items[i].channels)).catch(() => undefined);
     }
     return gen === this.gen;
   }
 
   private async showItem(s: Extract<PreviewSource, { kind: 'item' }>, gen: number) {
-    const rig = await CharacterRig.create(s.gender, await skinTint(s.base?.skin ?? DEFAULT_SKIN));
+    const rig = await CharacterRig.create(
+      s.gender,
+      await skinTint(s.base?.skin ?? DEFAULT_SKIN),
+      await eyeTint(s.base?.eye ?? DEFAULT_EYE)
+    );
     if (gen !== this.gen) return rig.dispose();
     this.attachRig(rig, s.gender);
     this.frameToken++;
@@ -156,7 +169,7 @@ export class PreviewController {
     // What the character already wears first; the new item then replaces whatever shares its slot.
     if (s.base && !(await this.wear(rig, s.base.items, gen))) return;
     try {
-      await rig.equip(s.item, await itemTint(s.item, s.color));
+      await rig.equip(s.item, await itemTint(s.item, s.color, s.channels));
     } catch (e) {
       if (gen !== this.gen) return;
       this.failed = true;

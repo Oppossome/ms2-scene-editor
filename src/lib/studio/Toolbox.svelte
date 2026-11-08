@@ -4,6 +4,9 @@
   import AssetBrowser from '#lib/components/AssetBrowser.svelte';
   import ItemBrowser from '#lib/components/ItemBrowser.svelte';
   import { deleteNamed, loadSaved, type OutfitSnapshot } from '#lib/stores/outfits.js';
+  import type { ChannelIndexes } from '#lib/character/tint.js';
+  import { DEFAULT_EYE } from '#lib/scene/model.js';
+  import { CHANNEL_LABELS, editableChannels, type PickChannel } from '#lib/scene/properties.js';
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
   import PaletteRow from './PaletteRow.svelte';
@@ -45,7 +48,9 @@
   let selected = $state.raw<ModelEntry | MapEntry | OutfitEntry | ItemRecord | null>(null);
   let outfits = $state.raw<OutfitEntry[]>([]);
   let itemGender = $state<0 | 1>(1);
+  /** Palette row chosen per item, and per-channel picks on top of it. */
   let colorChoice = $state<Record<string, number>>({});
+  let channelChoice = $state<Record<string, ChannelIndexes>>({});
   let added = $state(0);
   let addedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -114,9 +119,14 @@
     target
       ? JSON.stringify({
           skin: target.skin ?? 2,
+          eye: target.eye ?? DEFAULT_EYE,
           items: store.nodes
             .filter((n) => n.parentId === target.id && n.kind === 'item' && n.itemId)
-            .map((n) => ({ id: n.itemId!, ...(n.color !== undefined ? { color: n.color } : {}) }))
+            .map((n) => ({
+              id: n.itemId!,
+              ...(n.color !== undefined ? { color: n.color } : {}),
+              ...(n.channelColors ? { channels: n.channelColors } : {})
+            }))
         })
       : ''
   );
@@ -126,6 +136,22 @@
       : studio.insertPath
   );
   const itemColor = $derived(item ? (colorChoice[item.id] ?? item.defaultColor) : undefined);
+  const itemChannels = $derived(item ? channelChoice[item.id] : undefined);
+  /** Channels the game lets the player change on this item; a single one is just the colour set. */
+  const editable = $derived(editableChannels(item?.channels ?? [true, true]));
+
+  function pickSet(index: number) {
+    if (!item) return;
+    colorChoice = { ...colorChoice, [item.id]: index };
+    // A new colour set starts over: every channel follows it again.
+    const { [item.id]: _dropped, ...rest } = channelChoice;
+    channelChoice = rest;
+  }
+
+  function pickChannel(channel: PickChannel, index: number) {
+    if (!item) return;
+    channelChoice = { ...channelChoice, [item.id]: { ...channelChoice[item.id], [`ch${channel}`]: index } };
+  }
 
   // ----- preview -----
 
@@ -142,7 +168,7 @@
         return { kind: 'map', id: (s as MapEntry).id };
       case 'characters': {
         const o = (s as OutfitEntry).snapshot;
-        return { kind: 'character', gender: o.gender, skin: o.skin, items: o.items };
+        return { kind: 'character', gender: o.gender, skin: o.skin, eye: o.eye, items: o.items };
       }
       case 'items':
         return {
@@ -150,6 +176,7 @@
           item: s as ItemRecord,
           gender: itemTargetGender,
           color: itemColor,
+          channels: itemChannels,
           base: baseKey ? JSON.parse(baseKey) : undefined
         };
     }
@@ -186,7 +213,7 @@
         break;
       }
       case 'items':
-        id = studio.insertItem(s as ItemRecord, itemTargetGender, itemColor);
+        id = studio.insertItem(s as ItemRecord, itemTargetGender, itemColor, itemChannels);
         break;
     }
     if (id) noteAdded();
@@ -290,7 +317,23 @@
 
   {#if tab === 'items' && item?.palette}
     <div class="colors">
-      <PaletteRow palette={item.palette} value={itemColor ?? 0} onpick={(i) => (colorChoice = { ...colorChoice, [item.id]: i })} />
+      <div class="color-row">
+        {#if editable.length > 1}<span class="color-label">Colour set</span>{/if}
+        <PaletteRow palette={item.palette} value={itemColor ?? 0} onpick={pickSet} />
+      </div>
+      {#if editable.length > 1}
+        {#each editable as channel}
+          <div class="color-row">
+            <span class="color-label">{CHANNEL_LABELS[channel]}</span>
+            <PaletteRow
+              palette={item.palette}
+              {channel}
+              value={itemChannels?.[`ch${channel}` as const] ?? itemColor ?? 0}
+              onpick={(i) => pickChannel(channel, i)}
+            />
+          </div>
+        {/each}
+      {/if}
     </div>
   {/if}
 
@@ -414,6 +457,20 @@
   }
   .colors {
     flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .color-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .color-label {
+    font-size: 11px;
+    color: var(--muted);
   }
   .actions {
     display: flex;

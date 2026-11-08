@@ -65,6 +65,7 @@ const item = (id: string, assets: ItemAsset[]): ItemRecord => ({
   assets,
   palette: 0,
   defaultColor: 0,
+  channels: [false, false],
   type: 0,
   subtype: 0,
   category: ''
@@ -142,6 +143,29 @@ describe('CharacterRig skin colours', () => {
     await CharacterRig.create(1, skin);
     expect(calls()).toHaveLength(1);
     expect(calls()[0].slice(2)).toEqual([skin, skin]);
+  });
+
+  it('tints the face\'s own mask with the eye colours and the skin regions with the skin', async () => {
+    vi.mocked(applyTint).mockClear();
+    const skin = colors(0xffccaa);
+    const eye = colors(0x2244aa);
+    await CharacterRig.create(1, skin, eye);
+    expect(calls()[0].slice(2)).toEqual([eye, skin]);
+  });
+
+  it('changes the eye colours without touching the skin, once they are set', async () => {
+    const skin = colors(0xffccaa);
+    const eye = colors(0x2244aa);
+    const handle = { active: true, setColors: vi.fn(), setSkinColors: vi.fn() };
+    vi.mocked(applyTint).mockResolvedValueOnce(handle);
+    const rig = await CharacterRig.create(1, skin, eye);
+    const next = colors(0x00ff00);
+    rig.setEyeColors(next);
+    expect(handle.setColors).toHaveBeenLastCalledWith(next);
+    handle.setColors.mockClear();
+    rig.setSkinColors(colors(0x111111));
+    expect(handle.setColors).not.toHaveBeenCalled();
+    expect(handle.setSkinColors).toHaveBeenCalled();
   });
 
   it('gives a worn item the character skin for its skin regions, even without item colours', async () => {

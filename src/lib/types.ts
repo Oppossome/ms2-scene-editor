@@ -34,6 +34,8 @@ export interface ItemRecord {
   palette: number;
   /** Index (colorSN) of the palette colour the item uses by default. */
   defaultColor: number;
+  /** Whether the game lets the player change the palette's main (ch0) and detail (ch2) colours. */
+  channels: [main: boolean, detail: boolean];
   type: number;
   subtype: number;
   category: string;

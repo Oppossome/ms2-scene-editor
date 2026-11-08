@@ -3,10 +3,11 @@ import { downloadBuffer, safeFilename } from '../export/glb.js';
 import { decomposeForScene, extractNearby } from '../maps/extract.js';
 import type { ViewApi } from '../components/viewapi.js';
 import { defaultInsertParent, itemTargetCharacter } from '../scene/insert.js';
-import { DEFAULT_SKIN, nodesToOutfit, type Vec3 } from '../scene/model.js';
+import { DEFAULT_EYE, DEFAULT_SKIN, nodesToOutfit, type Vec3 } from '../scene/model.js';
 import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState, type NewItem } from '../scene/store.svelte.js';
 import { saveNamed, type OutfitSnapshot } from '../stores/outfits.js';
+import type { ChannelIndexes } from '../character/tint.js';
 import type { ItemRecord, MapData } from '../types.js';
 import { pathOf } from '../scene/tree.js';
 import { Vector3 } from 'three';
@@ -155,17 +156,17 @@ export class Studio {
   }
 
   /** Wear an item on the targeted character, or put it on a new base character of the given gender. */
-  insertItem(item: ItemRecord, gender: 0 | 1, color?: number): string {
+  insertItem(item: ItemRecord, gender: 0 | 1, color?: number, channelColors?: ChannelIndexes): string {
     const target = this.itemTarget;
     if (target) {
       const parent = this.insertParentId;
       const bone = this.insertBone;
-      return this.inserted(this.commitItem({ nodeId: target.id, bone }, item, color), parent, bone);
+      return this.inserted(this.commitItem({ nodeId: target.id, bone }, item, color, channelColors), parent, bone);
     }
     const parent = this.insertParentId;
     const id = this.store.addCharacter(
       { name: gender === 1 ? 'Female' : 'Male', gender, skin: DEFAULT_SKIN, parentId: parent, position: parent ? [0, 0, 0] : this.spawnPoint() },
-      [{ itemId: item.id, name: item.name, slots: item.slots, color }]
+      [{ itemId: item.id, name: item.name, slots: item.slots, color, channelColors }]
     );
     return this.inserted(id, parent);
   }
@@ -207,7 +208,10 @@ export class Studio {
     const records = await Promise.all(snapshot.items.map((e) => getItem(e.id)));
     const out: NewItem[] = [];
     records.forEach((record, i) => {
-      if (record) out.push({ itemId: record.id, name: record.name, slots: record.slots, color: snapshot.items[i].color });
+      if (record) {
+        const entry = snapshot.items[i];
+        out.push({ itemId: record.id, name: record.name, slots: record.slots, color: entry.color, channelColors: entry.channels });
+      }
     });
     return out;
   }
@@ -215,7 +219,7 @@ export class Studio {
   async addCharacter(name: string, snapshot: OutfitSnapshot, parentId?: string): Promise<string> {
     const items = await this.outfitItems(snapshot);
     return this.store.addCharacter(
-      { name, gender: snapshot.gender, skin: snapshot.skin, parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() },
+      { name, gender: snapshot.gender, skin: snapshot.skin, eye: snapshot.eye, parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() },
       items
     );
   }
@@ -227,24 +231,26 @@ export class Studio {
     );
   }
 
-  /** Make a character wear a saved outfit (one undo step per change; gender and skin follow the outfit). */
+  /** Make a character wear a saved outfit (one undo step per change; gender, skin and eyes follow the outfit). */
   async applyOutfit(characterId: string, snapshot: OutfitSnapshot) {
     const character = this.store.node(characterId);
     if (!character || character.kind !== 'character') return;
     const items = await this.outfitItems(snapshot);
-    if (character.gender !== snapshot.gender || character.skin !== snapshot.skin) {
-      this.store.update(characterId, { gender: snapshot.gender, skin: snapshot.skin });
+    const eye = snapshot.eye ?? DEFAULT_EYE;
+    if (character.gender !== snapshot.gender || character.skin !== snapshot.skin || (character.eye ?? DEFAULT_EYE) !== eye) {
+      this.store.update(characterId, { gender: snapshot.gender, skin: snapshot.skin, eye });
     }
     this.store.setOutfit(characterId, items);
   }
 
   /** Wear an item: it becomes a child of the character (optionally mounted on a bone). */
-  commitItem(target: AddTarget, item: ItemRecord, color?: number): string {
+  commitItem(target: AddTarget, item: ItemRecord, color?: number, channelColors?: ChannelIndexes): string {
     return this.store.equipItem(target.nodeId, {
       itemId: item.id,
       name: item.name,
       slots: item.slots,
       color,
+      channelColors,
       attachBone: target.bone
     });
   }

@@ -32,8 +32,12 @@
     if (node.kind === 'character') {
       const items = store.nodes
         .filter((n) => n.parentId === node.id && n.kind === 'item' && n.itemId)
-        .map((n) => ({ id: n.itemId!, ...(n.color !== undefined ? { color: n.color } : {}) }));
-      return { kind: 'character', gender: node.gender ?? 1, skin: node.skin, items };
+        .map((n) => ({
+          id: n.itemId!,
+          ...(n.color !== undefined ? { color: n.color } : {}),
+          ...(n.channelColors ? { channels: n.channelColors } : {})
+        }));
+      return { kind: 'character', gender: node.gender ?? 1, skin: node.skin, eye: node.eye, items };
     }
     return node.glb ? { kind: 'model', glb: node.glb, scale: node.scale[0] } : null;
   });
@@ -55,7 +59,8 @@
       bones: parent?.kind === 'character' ? runtime.boneNames(parent.id) : [],
       defaultBone: runtime.defaultBoneOf(node.id),
       skinned: node.kind === 'item' && runtime.isSkinned(node.id),
-      palette: itemRecord?.palette ?? 0
+      palette: itemRecord?.palette ?? 0,
+      channels: itemRecord?.channels ?? [true, true]
     });
   });
 
@@ -70,7 +75,7 @@
 
   function edit(key: string, value: unknown) {
     const node = selected;
-    const patch = node ? applyChange(key, value) : null;
+    const patch = node ? applyChange(key, value, node, runtime.currentFrame(node.id)) : null;
     if (node && patch) store.update(node.id, patch);
   }
 
@@ -117,6 +122,7 @@
                   value={row.value as number}
                   step={row.step}
                   min={row.min}
+                  max={row.max}
                   onstart={() => store.record()}
                   onchange={(v) => edit(row.key, v) /* recorded by update */}
                 />
@@ -144,7 +150,7 @@
               {:else if row.type === 'clip'}
                 <ClipPicker clips={row.clips ?? []} value={row.value as string} source={clipSource} oncommit={(name) => edit(row.key, name)} />
               {:else if row.type === 'palette'}
-                <PaletteRow palette={row.palette ?? 0} value={row.value as number} onpick={(i) => edit(row.key, i)} />
+                <PaletteRow palette={row.palette ?? 0} value={row.value as number} channel={row.channel} onpick={(i) => edit(row.key, i)} />
               {:else if row.type === 'action'}
                 <button onclick={resetOffset}>{row.value}</button>
               {:else}

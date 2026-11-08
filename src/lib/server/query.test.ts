@@ -11,6 +11,7 @@ const item = (over: Partial<ItemRecord>): ItemRecord => ({
   assets: [{ slot: 'CL', glb: 'a.glb', gender: 2, selfnode: '', targetnode: '', attachnode: '', replace: true, earfold: false, weapon: false }],
   palette: 0,
   defaultColor: 0,
+  channels: [false, false],
   type: 1,
   subtype: 0,
   category: '',

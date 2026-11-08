@@ -40,6 +40,21 @@ describe('parseSnapshot', () => {
   });
 });
 
+describe('eye colour in snapshots', () => {
+  it('keeps a valid eye colour and leaves older snapshots without one', () => {
+    expect(parseSnapshot({ version: 1, gender: 1, skin: 2, eye: 6, items: [] })?.eye).toBe(6);
+    expect(parseSnapshot({ version: 1, gender: 1, skin: 2, items: [] })).toEqual({ version: 1, gender: 1, skin: 2, items: [] });
+    expect(parseSnapshot({ version: 1, gender: 1, skin: 2, eye: -3, items: [] })).not.toHaveProperty('eye');
+  });
+});
+
+describe('channel picks in snapshots', () => {
+  it('accepts and sanitises per-channel colours', () => {
+    const parsed = parseSnapshot({ version: 1, gender: 1, skin: 2, items: [{ id: '5', color: 1, channels: { ch0: 4, ch2: 9, ch1: -1 } }, { id: '6', channels: { ch0: 'x' } }] });
+    expect(parsed?.items).toEqual([{ id: '5', color: 1, channels: { ch0: 4, ch2: 9 } }, { id: '6' }]);
+  });
+});
+
 describe('storage helpers', () => {
   it('saves, lists and deletes named outfits, ignoring corrupt entries', () => {
     const s = new MemoryStorage();

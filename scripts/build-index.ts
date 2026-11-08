@@ -112,11 +112,13 @@ function buildItems(): ItemRecord[] {
     let property: Record<string, string> | undefined;
     let palette = 0;
     let defaultColor = 0;
+    let channels: [boolean, boolean] = [false, false];
     for (const env of envs) {
       property ??= env.property;
       if (!palette) {
         palette = num(env.customize?.colorPalette);
         defaultColor = Math.max(0, num(env.customize?.defaultColorIndex, 0));
+        channels = [num(env.customize?.ch0) === 1, num(env.customize?.ch2) === 1];
       }
       for (const slot of env.slots?.slot ?? []) {
         for (const a of slot.asset ?? []) {
@@ -156,6 +158,7 @@ function buildItems(): ItemRecord[] {
       assets,
       palette,
       defaultColor,
+      channels,
       type: num(property?.type),
       subtype: num(property?.subtype),
       category: String(property?.category ?? '')

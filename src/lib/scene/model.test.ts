@@ -97,6 +97,20 @@ describe('parseScene', () => {
   });
 });
 
+describe('per-channel colours', () => {
+  it('parses valid channel picks on items and drops invalid ones', () => {
+    const ok = parseScene({ version: 1, nodes: [hero, { ...hat, channelColors: { ch0: 3, ch2: 1, ch1: -4, junk: 9 } }] })!;
+    expect(ok.nodes.find((n) => n.id === 'hat')?.channelColors).toEqual({ ch0: 3, ch2: 1 });
+    const none = parseScene({ version: 1, nodes: [hero, { ...hat, channelColors: { ch0: 'x' } }] })!;
+    expect(none.nodes.find((n) => n.id === 'hat')?.channelColors).toBeUndefined();
+  });
+
+  it('keeps the picks in a saved outfit snapshot', () => {
+    const scene = parseScene({ version: 1, nodes: [hero, { ...hat, channelColors: { ch2: 5 } }] })!;
+    expect(nodesToOutfit(scene.nodes, 'hero')?.items).toEqual([{ id: '11400604', color: 2, channels: { ch2: 5 } }]);
+  });
+});
+
 describe('nodesToOutfit', () => {
   it('lists the item children of a character in order', () => {
     const scene = parseScene({
@@ -107,8 +121,23 @@ describe('nodesToOutfit', () => {
       version: 1,
       gender: 1,
       skin: 3,
+      eye: 5,
       items: [{ id: '11400604', color: 2 }, { id: '5' }]
     });
+  });
+
+  it('keeps a valid freeze frame and drops others', () => {
+    expect(parseScene({ version: 1, nodes: [{ ...hero, freeze: 12 }] })!.nodes[0].freeze).toBe(12);
+    expect(parseScene({ version: 1, nodes: [{ ...hero, freeze: 0 }] })!.nodes[0].freeze).toBe(0);
+    for (const bad of [-1, 1.5, 'x', null]) expect(parseScene({ version: 1, nodes: [{ ...hero, freeze: bad }] })!.nodes[0].freeze).toBeUndefined();
+  });
+
+  it('keeps a character\'s eye colour, defaulting and repairing it when missing or invalid', () => {
+    const eyed = parseScene({ version: 1, nodes: [{ ...hero, eye: 9 }] })!;
+    expect(eyed.nodes[0].eye).toBe(9);
+    expect(nodesToOutfit(eyed.nodes, 'hero')?.eye).toBe(9);
+    expect(parseScene({ version: 1, nodes: [hero] })!.nodes[0].eye).toBe(5);
+    expect(parseScene({ version: 1, nodes: [{ ...hero, eye: -1 }] })!.nodes[0].eye).toBe(5);
   });
 
   it('is null for non-characters', () => {

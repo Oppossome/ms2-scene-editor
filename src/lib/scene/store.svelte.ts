@@ -1,5 +1,6 @@
 import { untrack } from 'svelte';
 import {
+  DEFAULT_EYE,
   DEFAULT_SKIN,
   History,
   newId,
@@ -12,6 +13,7 @@ import {
   type SceneNode,
   type Vec3
 } from './model.js';
+import type { ChannelIndexes } from '../character/tint.js';
 import { canParent, cloneSubtree, deleteSubtree, moveNode, uniqueName } from './tree.js';
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
@@ -28,8 +30,10 @@ export interface NewNode {
   mapId?: string;
   gender?: 0 | 1;
   skin?: number;
+  eye?: number;
   itemId?: string;
   color?: number;
+  channelColors?: ChannelIndexes;
   slots?: string[];
   clip?: string;
   position?: Vec3;
@@ -42,6 +46,7 @@ export interface NewItem {
   name: string;
   slots: string[];
   color?: number;
+  channelColors?: ChannelIndexes;
   attachBone?: string;
 }
 
@@ -75,11 +80,13 @@ const toNode = (spec: NewNode, parentId: string | null): SceneNode => {
   if (spec.kind === 'character') {
     node.gender = spec.gender ?? 1;
     node.skin = spec.skin ?? DEFAULT_SKIN;
+    node.eye = spec.eye ?? DEFAULT_EYE;
   }
   if (spec.kind === 'item') {
     node.itemId = spec.itemId;
     node.slots = spec.slots ?? [];
     if (spec.color !== undefined) node.color = spec.color;
+    if (spec.channelColors && Object.keys(spec.channelColors).length) node.channelColors = { ...spec.channelColors };
   }
   if (spec.clip) node.clip = spec.clip;
   return node;
@@ -191,7 +198,15 @@ export class SceneState {
       (n.itemId === item.itemId || (n.slots ?? []).some((s) => item.slots.includes(s)));
     const kept = this.nodes.filter((n) => !clash(n));
     const node = toNode(
-      { kind: 'item', name: item.name, itemId: item.itemId, slots: item.slots, color: item.color, attachBone: item.attachBone },
+      {
+        kind: 'item',
+        name: item.name,
+        itemId: item.itemId,
+        slots: item.slots,
+        color: item.color,
+        channelColors: item.channelColors,
+        attachBone: item.attachBone
+      },
       characterId
     );
     this.nodes = this.insert(kept, node);
@@ -207,7 +222,7 @@ export class SceneState {
     this.record();
     const kept = this.nodes.filter((n) => !(n.parentId === characterId && n.kind === 'item'));
     const added = items.map((i) =>
-      toNode({ kind: 'item', name: i.name, itemId: i.itemId, slots: i.slots, color: i.color }, characterId)
+      toNode({ kind: 'item', name: i.name, itemId: i.itemId, slots: i.slots, color: i.color, channelColors: i.channelColors }, characterId)
     );
     this.nodes = [...kept, ...added];
     this.setExpanded(characterId, true);
@@ -215,7 +230,7 @@ export class SceneState {
 
   /** A character with its outfit, in one undo step. */
   addCharacter(
-    spec: { name: string; gender: 0 | 1; skin?: number; parentId?: string | null; position?: Vec3 },
+    spec: { name: string; gender: 0 | 1; skin?: number; eye?: number; parentId?: string | null; position?: Vec3 },
     items: NewItem[] = []
   ): string {
     const parentId = parentIn(this.nodes, { kind: 'character', name: spec.name, parentId: spec.parentId });
@@ -227,12 +242,13 @@ export class SceneState {
         name: uniqueName(this.nodes, parentId, spec.name),
         gender: spec.gender,
         skin: spec.skin,
+        eye: spec.eye,
         position: spec.position
       },
       parentId
     );
     const children = items.map((i) =>
-      toNode({ kind: 'item', name: i.name, itemId: i.itemId, slots: i.slots, color: i.color }, character.id)
+      toNode({ kind: 'item', name: i.name, itemId: i.itemId, slots: i.slots, color: i.color, channelColors: i.channelColors }, character.id)
     );
     this.nodes = [...this.nodes, character, ...children];
     this.select(character.id);

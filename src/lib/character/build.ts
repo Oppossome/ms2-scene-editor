@@ -1,8 +1,9 @@
 import type { ItemRecord, PaletteColor } from '../types.js';
-import { paletteToTint, type TintColors } from './tint.js';
+import { paletteToTint, tintFromPalette, type ChannelIndexes, type TintColors } from './tint.js';
 
-/** The body's skin tones live in palette 1. */
+/** The body's skin tones live in palette 1, eye colours (those of the face items) in palette 3. */
 export const SKIN_PALETTE = 1;
+export const EYE_PALETTE = 3;
 
 const paletteCache = new Map<number, Promise<PaletteColor[]>>();
 
@@ -15,19 +16,25 @@ export function getPalette(id: number): Promise<PaletteColor[]> {
   return hit;
 }
 
-/** Tint of a skin tone (palette index), or undefined when the palette has no such colour. */
-export async function skinTint(index: number): Promise<TintColors | undefined> {
-  const colors = await getPalette(SKIN_PALETTE);
-  const chosen = colors[index];
+async function paletteTint(palette: number, index: number): Promise<TintColors | undefined> {
+  const chosen = (await getPalette(palette))[index];
   return chosen ? paletteToTint(chosen) : undefined;
 }
 
-/** Tint of an item for a chosen palette colour (its default when none is given); undefined when not customisable. */
-export async function itemTint(item: ItemRecord, index?: number): Promise<TintColors | undefined> {
+/** Tint of a skin tone (palette index), or undefined when the palette has no such colour. */
+export const skinTint = (index: number) => paletteTint(SKIN_PALETTE, index);
+
+/** Tint of an eye colour (palette index): the iris regions of the face use it. */
+export const eyeTint = (index: number) => paletteTint(EYE_PALETTE, index);
+
+/**
+ * Tint of an item for a chosen palette row (its default when none is given), with optional per-channel picks;
+ * undefined when the item is not customisable.
+ */
+export async function itemTint(item: ItemRecord, index?: number, picks?: ChannelIndexes | null): Promise<TintColors | undefined> {
   if (!item.palette) return undefined;
   const colors = await getPalette(item.palette);
-  const chosen = colors[index ?? item.defaultColor] ?? colors[0];
-  return chosen ? paletteToTint(chosen) : undefined;
+  return tintFromPalette(colors, index ?? item.defaultColor, picks);
 }
 
 const itemCache = new Map<string, Promise<ItemRecord | null>>();

@@ -6,6 +6,8 @@ export class AnimationPlayer {
   private action: AnimationAction | null = null;
   clip: AnimationClip | null = null;
   playing = false;
+  /** Held on one frame by `freeze`, until `unfreeze`. */
+  frozen = false;
 
   constructor(root: Object3D) {
     this.mixer = new AnimationMixer(root);
@@ -22,6 +24,23 @@ export class AnimationPlayer {
     action.paused = false;
     this.action = action;
     this.playing = true;
+    this.frozen = false;
+  }
+
+  /** Hold the clip on one moment (clamped to the clip); the mixer keeps running but the pose no longer changes. */
+  freeze(seconds: number) {
+    if (!this.action) return;
+    this.seek(seconds);
+    this.action.paused = true;
+    this.playing = false;
+    this.frozen = true;
+  }
+
+  /** Carry on from the frozen frame. */
+  unfreeze() {
+    if (!this.frozen) return;
+    this.frozen = false;
+    this.resume();
   }
 
   pause() {
@@ -39,6 +58,7 @@ export class AnimationPlayer {
     this.action = null;
     this.clip = null;
     this.playing = false;
+    this.frozen = false;
   }
 
   get time() {
