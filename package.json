@@ -2,6 +2,7 @@
   "name": "ms2sceneeditor",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Extract MapleStory 2 assets and dress characters / build scenes with them",
   "imports": {
