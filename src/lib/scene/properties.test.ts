@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneNode } from './model';
-import { applyChange, describeBone, describeNode, RAD, stepFrame, type PropContext } from './properties';
+import { applyChange, describeBone, describeNode, hasOwnColours, RAD, stepFrame, type PropContext } from './properties';
 
 const node = (over: Partial<SceneNode> = {}): SceneNode => ({
   id: 'a',
@@ -234,5 +234,13 @@ describe('describeBone', () => {
   it('describes a bone', () => {
     const [s] = describeBone('Hero', 'Bip01_R_Hand', 3);
     expect(s.rows.map((r) => r.value)).toEqual(['Bip01 R Hand', 'Bone', 'Hero', '3']);
+  });
+});
+
+describe('hasOwnColours', () => {
+  it('is false for faces, which take the eye colour', () => {
+    expect(hasOwnColours({ slots: ['FA'] })).toBe(false);
+    expect(hasOwnColours({ slots: ['CP'] })).toBe(true);
+    expect(hasOwnColours(null)).toBe(false);
   });
 });

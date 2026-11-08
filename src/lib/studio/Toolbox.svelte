@@ -6,7 +6,7 @@
   import { deleteNamed, loadSaved, type OutfitSnapshot } from '#lib/stores/outfits.js';
   import type { ChannelIndexes } from '#lib/character/tint.js';
   import { DEFAULT_EYE } from '#lib/scene/model.js';
-  import { CHANNEL_LABELS, editableChannels, type PickChannel } from '#lib/scene/properties.js';
+  import { CHANNEL_LABELS, editableChannels, hasOwnColours, type PickChannel } from '#lib/scene/properties.js';
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
   import PaletteRow from './PaletteRow.svelte';
@@ -315,7 +315,7 @@
     <PreviewStage {preview} empty={tab === 'maps' ? 'Select a map to see it.' : 'Select something to preview it.'} />
   </div>
 
-  {#if tab === 'items' && item?.palette}
+  {#if tab === 'items' && item?.palette && hasOwnColours(item)}
     <div class="colors">
       <div class="color-row">
         {#if editable.length > 1}<span class="color-label">Colour set</span>{/if}

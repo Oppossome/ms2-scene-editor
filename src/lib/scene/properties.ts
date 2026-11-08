@@ -60,6 +60,9 @@ export const BODY_PALETTE = 1;
 /** Eye colours are the palette of the face items. */
 export const EYE_PALETTE = 3;
 
+/** Whether the colours of an item are its own to choose (a face takes the character's eye colour instead). */
+export const hasOwnColours = (item: { slots: string[] } | null | undefined) => !!item && !item.slots.includes('FA');
+
 /** The palette channels a player can pick separately (the mask's ch0 and ch2), and their names in the UI. */
 export type PickChannel = 0 | 2;
 export const CHANNEL_LABELS: Record<PickChannel, string> = { 0: 'Main', 2: 'Detail' };

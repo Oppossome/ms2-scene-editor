@@ -3,7 +3,11 @@ import { instantiate } from '../assets/loader.js';
 import { bodyModel } from '../assets/urls.js';
 import type { ItemAsset, ItemRecord } from '../types.js';
 import { bodyMeshesForSlot, conflictingItems, pickAssets } from './slots.js';
+import { applyFaceTextures } from './face.js';
 import { applyTint, type TintColors, type TintHandle } from './tint.js';
+
+/** The slot of face items. */
+const FACE_SLOT = 'FA';
 
 interface Equipped {
   item: ItemRecord;
@@ -95,6 +99,7 @@ export class CharacterRig {
   setEyeColors(colors: TintColors) {
     this.eyeColors = colors;
     this.skinTint?.setColors(colors);
+    for (const eq of this.equipped.values()) if (eq.slots.includes(FACE_SLOT)) for (const tint of eq.tints) tint.setColors(colors);
   }
 
   setSkinColors(colors: TintColors) {
@@ -105,7 +110,10 @@ export class CharacterRig {
   }
 
   setItemColors(itemId: string, colors: TintColors) {
-    for (const tint of this.equipped.get(itemId)?.tints ?? []) tint.setColors(colors);
+    const eq = this.equipped.get(itemId);
+    // A worn face follows the character's eye colour, not a colour of its own.
+    if (eq?.slots.includes(FACE_SLOT) && this.eyeColors) return;
+    for (const tint of eq?.tints ?? []) tint.setColors(colors);
   }
 
   isEquipped(itemId: string) {
@@ -169,11 +177,13 @@ export class CharacterRig {
     return walk(this.skinRoot);
   }
 
-  private async loadAssets(assets: ItemAsset[], colors?: TintColors) {
+  private async loadAssets(item: ItemRecord, assets: ItemAsset[], colors?: TintColors) {
     const glbs = [...new Set(assets.map((a) => a.glb))];
+    const isFace = item.slots.includes(FACE_SLOT);
     const loaded: Loaded[] = await Promise.all(
       glbs.map(async (glb) => {
         const model = await instantiate(glb);
+        if (isFace) await applyFaceTextures(model.object, item.id);
         // Items without palette colours still get their skin regions tinted.
         const tint = colors || this.skinColors ? await applyTint(model.object, glb, colors ?? null, this.skinColors) : null;
         return { object: model.object, tint };
@@ -189,7 +199,9 @@ export class CharacterRig {
 
     const assets = pickAssets(item, this.gender);
     if (assets.length === 0) throw new Error(`${item.name} has no model for this gender`);
-    const { glbs, loaded } = await this.loadAssets(assets, colors);
+    // A worn face is coloured with the character's eye colour (in the game the face's colour is the eye colour).
+    const tintColors = item.slots.includes(FACE_SLOT) ? (this.eyeColors ?? colors) : colors;
+    const { glbs, loaded } = await this.loadAssets(item, assets, tintColors);
     if (this.disposed || this.tokens.get(item.id) !== token) return;
 
     const slots = [...new Set(assets.map((a) => a.slot))];

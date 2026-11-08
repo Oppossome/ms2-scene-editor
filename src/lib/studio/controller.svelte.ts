@@ -32,6 +32,8 @@ export interface MenuItem {
   danger?: boolean;
   /** Draw a divider above this entry. */
   separator?: boolean;
+  /** A switch: shows a check mark when on (leave out for plain commands). */
+  checked?: boolean;
 }
 
 export interface AddTarget {
@@ -70,6 +72,8 @@ export class Studio {
   insertAtRoot = $state(false);
   /** Toolbox: height in pixels of the preview pane. */
   previewHeight = $state(260);
+  /** The ground grid of the main viewport. */
+  showGrid = $state(true);
   /** Toolbox (the left dock): shown or hidden. */
   toolboxOpen = $state(true);
   /** Bumped to ask the Toolbox to put the cursor in its search box. */

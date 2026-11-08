@@ -1,6 +1,7 @@
 <script lang="ts">
   import ContextMenu from './ContextMenu.svelte';
   import type { MenuItem, Studio } from './controller.svelte.js';
+  import { viewMenuItems } from './viewmenu.js';
 
   let { studio }: { studio: Studio } = $props();
 
@@ -8,15 +9,17 @@
 
   let fileButton = $state<HTMLButtonElement>();
   let fileInput = $state<HTMLInputElement>();
-  let menu = $state.raw<{ x: number; y: number } | null>(null);
+  let viewButton = $state<HTMLButtonElement>();
+  let open = $state<{ which: 'file' | 'view'; x: number; y: number } | null>(null);
 
-  function toggleFile() {
-    if (menu) {
-      menu = null;
+  /** Open a menu under its button, or close it when it is the one already open. */
+  function toggle(which: 'file' | 'view', button: HTMLButtonElement | undefined) {
+    if (open?.which === which) {
+      open = null;
       return;
     }
-    const r = fileButton!.getBoundingClientRect();
-    menu = { x: r.left, y: r.bottom + 2 };
+    const r = button!.getBoundingClientRect();
+    open = { which, x: r.left, y: r.bottom + 2 };
   }
 
   const fileItems = $derived<MenuItem[]>([
@@ -31,6 +34,8 @@
     { label: 'Clear scene', action: () => store.clear(), disabled: store.nodes.length === 0, danger: true, separator: true }
   ]);
 
+  const viewItems = $derived(viewMenuItems(studio));
+
   async function onFile(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -44,12 +49,21 @@
   <!-- Stop the pointerdown so the open menu's outside-click handler does not close it before the click toggles it. -->
   <button
     class="tab"
-    class:open={!!menu}
+    class:open={open?.which === 'file'}
     bind:this={fileButton}
     onpointerdown={(e) => e.stopPropagation()}
-    onclick={toggleFile}
+    onclick={() => toggle('file', fileButton)}
     aria-haspopup="menu"
-    aria-expanded={!!menu}>File</button
+    aria-expanded={open?.which === 'file'}>File</button
+  >
+  <button
+    class="tab"
+    class:open={open?.which === 'view'}
+    bind:this={viewButton}
+    onpointerdown={(e) => e.stopPropagation()}
+    onclick={() => toggle('view', viewButton)}
+    aria-haspopup="menu"
+    aria-expanded={open?.which === 'view'}>View</button
   >
   <span class="sep"></span>
   <button class="icon" onclick={() => store.undo()} disabled={!store.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
@@ -61,8 +75,10 @@
   <input bind:this={fileInput} type="file" accept="application/json" onchange={onFile} hidden />
 </div>
 
-{#if menu}
-  <ContextMenu x={menu.x} y={menu.y} items={fileItems} onclose={() => (menu = null)} />
+{#if open}
+  {#key open.which}
+    <ContextMenu x={open.x} y={open.y} items={open.which === 'file' ? fileItems : viewItems} onclose={() => (open = null)} />
+  {/key}
 {/if}
 
 <style>

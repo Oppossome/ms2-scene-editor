@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getItem } from '#lib/character/build.js';
   import { ONE, ZERO, type Vec3 } from '#lib/scene/model.js';
-  import { applyChange, describeBone, describeNode, type PropRow } from '#lib/scene/properties.js';
+  import { applyChange, describeBone, describeNode, hasOwnColours, type PropRow } from '#lib/scene/properties.js';
   import { pathOf } from '#lib/scene/tree.js';
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
@@ -60,7 +60,7 @@
       bones: parent?.kind === 'character' ? runtime.boneNames(parent.id) : [],
       defaultBone: runtime.defaultBoneOf(node.id),
       skinned: node.kind === 'item' && runtime.isSkinned(node.id),
-      palette: itemRecord?.palette ?? 0,
+      palette: hasOwnColours(itemRecord) ? (itemRecord?.palette ?? 0) : 0,
       channels: itemRecord?.channels ?? [true, true]
     });
   });

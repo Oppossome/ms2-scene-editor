@@ -28,6 +28,7 @@
     try {
       const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}');
       if (typeof saved.leftOpen === 'boolean') studio.toolboxOpen = saved.leftOpen;
+      if (typeof saved.showGrid === 'boolean') studio.showGrid = saved.showGrid;
       if (typeof saved.leftWidth === 'number') leftWidth = clamp(saved.leftWidth, 200, 600);
       if (typeof saved.rightWidth === 'number') rightWidth = clamp(saved.rightWidth, 220, 600);
       if (typeof saved.explorerHeight === 'number') explorerHeight = clamp(saved.explorerHeight, 100, 900);
@@ -44,7 +45,7 @@
 
   $effect(() => {
     if (!ready) return;
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen: studio.toolboxOpen, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen: studio.toolboxOpen, showGrid: studio.showGrid, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
   });
 
   // Autosave on every change once the stored scene has been loaded.
@@ -137,7 +138,7 @@
       </div>
 
       <div class="viewport">
-        <Viewport viewApi={studio.view} gridSize={4000} onTick={(d) => runtime.update(d)}>
+        <Viewport viewApi={studio.view} grid={studio.showGrid} gridSize={4000} onTick={(d) => runtime.update(d)}>
           <StudioScene {studio} />
         </Viewport>
       </div>

@@ -28,7 +28,13 @@
 <div class="menu" bind:this={el} style:left={`${left || x}px`} style:top={`${top || y}px`} role="menu">
   {#each items as item}
     {#if item.separator}<hr />{/if}
-    <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={() => run(item)}>{item.label}</button>
+    {#if item.checked !== undefined}
+      <button role="menuitemcheckbox" aria-checked={item.checked} class="check" disabled={item.disabled} onclick={() => run(item)}>
+        <span class="mark">{item.checked ? '\u2713' : ''}</span>{item.label}
+      </button>
+    {:else}
+      <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={() => run(item)}>{item.label}</button>
+    {/if}
   {/each}
 </div>
 
@@ -54,6 +60,10 @@
   }
   button:hover:not(:disabled) {
     background: var(--accent);
+  }
+  .mark {
+    display: inline-block;
+    width: 1.3em;
   }
   button.danger {
     color: #ff9a9a;

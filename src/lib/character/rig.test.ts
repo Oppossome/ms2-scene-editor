@@ -40,7 +40,10 @@ vi.mock('./tint.js', async (original) => {
   };
 });
 
+vi.mock('./face.js', () => ({ applyFaceTextures: vi.fn(async () => true) }));
+
 const { CharacterRig } = await import('./rig');
+const { applyFaceTextures } = await import('./face');
 const { applyTint } = await import('./tint');
 
 const asset = (slot: string, glb: string, over: Partial<ItemAsset> = {}): ItemAsset => ({
@@ -119,6 +122,54 @@ describe('CharacterRig items', () => {
     rig.setItemVisible('3', true);
     expect(bodyHair.visible).toBe(false);
     expect(mount.visible).toBe(true);
+  });
+});
+
+describe('CharacterRig faces', () => {
+  const face = item('10300002', [asset('FA', 'face.glb', { replace: true, targetnode: 'FA' })]);
+  const eyes = (hex: number) => ({ c0: new Color(hex), c1: new Color(hex), c2: new Color(hex) });
+  const palette = eyes(0xaa0000);
+
+  it('gives a face item its own textures, but nothing else', async () => {
+    const rig = await CharacterRig.create(1);
+    vi.mocked(applyFaceTextures).mockClear();
+    await rig.equip(face);
+    expect(applyFaceTextures).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(applyFaceTextures).mock.calls[0][1]).toBe('10300002');
+    await rig.equip(hatA);
+    expect(applyFaceTextures).toHaveBeenCalledTimes(1);
+  });
+
+  it('colours a worn face with the character eye colour instead of its own palette colour', async () => {
+    const eye = eyes(0x2244aa);
+    const rig = await CharacterRig.create(1, undefined, eye);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(face, palette);
+    const faceCall = vi.mocked(applyTint).mock.calls.find((c) => c[1] === 'face.glb')!;
+    expect(faceCall[2]).toBe(eye);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(hatA, palette);
+    expect(vi.mocked(applyTint).mock.calls[0][2]).toBe(palette);
+  });
+
+  it('uses the face colour when the character has no eye colour', async () => {
+    const rig = await CharacterRig.create(1);
+    vi.mocked(applyTint).mockClear();
+    await rig.equip(face, palette);
+    expect(vi.mocked(applyTint).mock.calls.find((c) => c[1] === 'face.glb')![2]).toBe(palette);
+  });
+
+  it('recolours a worn face when the eye colour changes, but not when its own colour is set', async () => {
+    const handle = { active: true, setColors: vi.fn(), setSkinColors: vi.fn() };
+    const rig = await CharacterRig.create(1, undefined, eyes(0x2244aa));
+    vi.mocked(applyTint).mockResolvedValueOnce(handle);
+    await rig.equip(face);
+    const next = eyes(0x00ff00);
+    rig.setEyeColors(next);
+    expect(handle.setColors).toHaveBeenLastCalledWith(next);
+    handle.setColors.mockClear();
+    rig.setItemColors('10300002', palette);
+    expect(handle.setColors).not.toHaveBeenCalled();
   });
 });
 
