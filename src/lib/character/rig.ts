@@ -17,7 +17,7 @@ interface Equipped {
   addedNodes: string[];
   /** Static items: a group per attached model, parented to a bone. Its transform is the item's offset. */
   mounts: { mount: Group; bone: string; home: string }[];
-  /** Why the item is switched off (user hid it, or a preview covers its slot). Off items also release their body parts. */
+  /** Why the item is switched off (the user hid it). Off items also release their body parts. */
   off: number;
   userHidden: boolean;
 }
@@ -61,8 +61,6 @@ export class CharacterRig {
 
   private readonly hideCount = new Map<Object3D, number>();
   private readonly tokens = new Map<string, number>();
-  private previewToken = 0;
-  private preview: { eq: Equipped; covered: Equipped[] } | null = null;
   private disposed = false;
   private skinTint: TintHandle | null = null;
 
@@ -149,7 +147,6 @@ export class CharacterRig {
       for (const o of eq.objects) o.traverse((c) => added.add(c));
     };
     this.equipped.forEach(collect);
-    if (this.preview) collect(this.preview.eq);
     const walk = (o: Object3D): BoneInfo[] =>
       o.children
         .filter((c) => !added.has(c) && !(c as Mesh).isMesh && c.name)
@@ -179,7 +176,6 @@ export class CharacterRig {
     const { glbs, loaded } = await this.loadAssets(assets, colors);
     if (this.disposed || this.tokens.get(item.id) !== token) return;
 
-    this.removePreview();
     const slots = [...new Set(assets.map((a) => a.slot))];
     for (const id of conflictingItems(this.slotOwner, slots, item.id)) this.unequip(id);
     if (this.equipped.has(item.id)) this.unequip(item.id);
@@ -188,43 +184,6 @@ export class CharacterRig {
     this.equipped.set(item.id, eq);
     for (const slot of slots) this.slotOwner.set(slot, item.id);
     this.onChange?.();
-  }
-
-  /**
-   * Show an item on the character without wearing it: whatever it would replace is covered while the preview
-   * is up. Nothing is recorded; clearPreview() (or the next preview/equip) takes it away again.
-   */
-  async previewEquip(item: ItemRecord, colors?: TintColors): Promise<void> {
-    const token = ++this.previewToken;
-    const assets = pickAssets(item, this.gender);
-    if (assets.length === 0) throw new Error(`${item.name} has no model for this gender`);
-    const { glbs, loaded } = await this.loadAssets(assets, colors);
-    if (this.disposed || token !== this.previewToken) return;
-
-    this.removePreview();
-    const slots = [...new Set(assets.map((a) => a.slot))];
-    const coveredIds = new Set(conflictingItems(this.slotOwner, slots, item.id));
-    if (this.equipped.has(item.id)) coveredIds.add(item.id);
-    const covered = [...coveredIds].map((id) => this.equipped.get(id)).filter((e): e is Equipped => !!e);
-    for (const eq of covered) this.switchOff(eq);
-    this.preview = { eq: this.install(item, assets, glbs, loaded), covered };
-  }
-
-  clearPreview() {
-    this.previewToken++;
-    this.removePreview();
-  }
-
-  get previewing(): boolean {
-    return this.preview !== null;
-  }
-
-  private removePreview() {
-    const p = this.preview;
-    if (!p) return;
-    this.preview = null;
-    this.release(p.eq);
-    for (const eq of p.covered) if (this.equipped.get(eq.item.id) === eq) this.switchOn(eq);
   }
 
   unequip(itemId: string) {
@@ -243,7 +202,6 @@ export class CharacterRig {
 
   dispose() {
     this.disposed = true;
-    this.clearPreview();
     for (const id of [...this.equipped.keys()]) this.unequip(id);
     this.root.removeFromParent();
   }

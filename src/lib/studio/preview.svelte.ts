@@ -13,7 +13,14 @@ export type PreviewSource =
   | { kind: 'model'; glb: string; scale?: number }
   | { kind: 'map'; id: string }
   | { kind: 'character'; gender: 0 | 1; skin?: number; items: { id: string; color?: number }[] }
-  | { kind: 'item'; item: ItemRecord; gender: 0 | 1; color?: number };
+  | {
+      kind: 'item';
+      item: ItemRecord;
+      gender: 0 | 1;
+      color?: number;
+      /** The character the item is tried on (its skin and what it already wears); a bare body when omitted. */
+      base?: { skin: number; items: { id: string; color?: number }[] };
+    };
 
 /**
  * Loads one thing at a time into an object the preview stage draws, with its animation and status. A newer
@@ -123,23 +130,30 @@ export class PreviewController {
     this.attachRig(rig, s.gender);
     this.frameToken++;
     this.status = '';
-    const records = await Promise.all(s.items.map((i) => getItem(i.id)));
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
-      if (!record) continue;
-      if (gen !== this.gen) return;
-      await rig.equip(record, await itemTint(record, s.items[i].color)).catch(() => undefined);
-    }
-    if (gen !== this.gen) return;
+    if (!(await this.wear(rig, s.items, gen))) return;
     void this.loadBodyClips(s.gender, gen, 'idle_a');
   }
 
+  /** Put items on a rig in order; false when a newer `show` took over meanwhile. */
+  private async wear(rig: CharacterRig, items: { id: string; color?: number }[], gen: number): Promise<boolean> {
+    const records = await Promise.all(items.map((i) => getItem(i.id)));
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      if (!record) continue;
+      if (gen !== this.gen) return false;
+      await rig.equip(record, await itemTint(record, items[i].color)).catch(() => undefined);
+    }
+    return gen === this.gen;
+  }
+
   private async showItem(s: Extract<PreviewSource, { kind: 'item' }>, gen: number) {
-    const rig = await CharacterRig.create(s.gender, await skinTint(DEFAULT_SKIN));
+    const rig = await CharacterRig.create(s.gender, await skinTint(s.base?.skin ?? DEFAULT_SKIN));
     if (gen !== this.gen) return rig.dispose();
     this.attachRig(rig, s.gender);
     this.frameToken++;
     this.status = '';
+    // What the character already wears first; the new item then replaces whatever shares its slot.
+    if (s.base && !(await this.wear(rig, s.base.items, gen))) return;
     try {
       await rig.equip(s.item, await itemTint(s.item, s.color));
     } catch (e) {

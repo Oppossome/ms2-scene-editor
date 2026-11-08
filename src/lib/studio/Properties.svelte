@@ -139,27 +139,10 @@
       </details>
     {/each}
 
-    <details open>
-      <summary>Actions</summary>
-      <div class="actions">
-        {#if selected}
-          {@const node = selected}
-          <button onclick={() => studio.focus(node.id)}>Focus</button>
-          {#if node.kind !== 'item'}
-            <button onclick={() => studio.openAddChild(node.id)}>Add child...</button>
-            <button onclick={() => store.duplicate(node.id)}>Duplicate</button>
-            <button onclick={() => store.group(node.id)}>Group</button>
-          {/if}
-          {#if node.kind !== 'item' && node.kind !== 'map'}
-            <button onclick={() => studio.exportGlb(node.id)} disabled={studio.busy === 'export'}>Export GLB</button>
-          {/if}
-          <button class="danger" onclick={() => store.remove(node.id)}>Delete</button>
-        {:else if bone}
-          <button onclick={() => studio.openAddChild(bone.characterId, bone.bone)}>Add child...</button>
-        {/if}
-      </div>
-      {#if selected?.kind === 'map'}
-        {@const map = selected}
+    {#if selected?.kind === 'map'}
+      {@const map = selected}
+      <details open>
+        <summary>Map</summary>
         <div class="extra">
           <label>Extract props within <input type="number" min="50" step="50" bind:value={radius} /> of the camera target</label>
           <button onclick={() => studio.extractMapProps(map.id, radius)} disabled={studio.busy === 'extract'}>
@@ -167,9 +150,12 @@
           </button>
           <p class="hint">The map stays; the props are copied into a new group as editable nodes (up to 300).</p>
         </div>
-      {/if}
-      {#if selected?.kind === 'character'}
-        {@const character = selected}
+      </details>
+    {/if}
+    {#if selected?.kind === 'character'}
+      {@const character = selected}
+      <details open>
+        <summary>Outfit</summary>
         <div class="extra">
           <div class="inline">
             <input placeholder="Outfit name" bind:value={outfitName} onkeydown={(e) => e.key === 'Enter' && saveOutfit()} />
@@ -178,8 +164,8 @@
           {#if saved}<p class="hint">{saved}</p>{/if}
           <button onclick={() => store.setOutfit(character.id, [])}>Remove all items</button>
         </div>
-      {/if}
-    </details>
+      </details>
+    {/if}
   {/if}
 </div>
 
@@ -241,15 +227,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #b9bdd0;
-  }
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 6px 8px;
-  }
-  .actions .danger {
-    color: #ff9a9a;
   }
   .extra {
     display: flex;

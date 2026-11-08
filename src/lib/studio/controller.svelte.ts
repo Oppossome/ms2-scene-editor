@@ -53,7 +53,6 @@ export class Studio {
   readonly runtime = new SceneRuntime();
   readonly view: ViewApi = {};
 
-  addTarget = $state.raw<AddTarget | null>(null);
   menu = $state.raw<MenuState | null>(null);
   message = $state('');
   busy = $state('');
@@ -66,14 +65,18 @@ export class Studio {
   insertAtRoot = $state(false);
   /** Toolbox: height in pixels of the preview pane. */
   previewHeight = $state(260);
-  /** Toolbox: current tab, kept while Add Child borrows the dock. */
+  /** Toolbox (the left dock): shown or hidden. */
+  toolboxOpen = $state(true);
+  /** Bumped to ask the Toolbox to put the cursor in its search box. */
+  toolboxFocus = $state(0);
+  /** Toolbox: current tab. */
   toolboxTab = $state<'props' | 'npcs' | 'maps' | 'characters' | 'items'>('props');
 
   /**
    * The node the Toolbox last inserted and the parent it used. Inserting selects the new node, which would
    * otherwise make the next insert land inside it; while that node stays selected the same parent is reused.
    */
-  private lastInsert: { id: string; parent: string | null } | null = null;
+  private lastInsert: { id: string; parent: string | null; bone?: string } | null = null;
 
   constructor() {
     this.store.hooks.localFor = (id, parentId, bone) => this.runtime.localFor(id, parentId, bone);
@@ -82,28 +85,45 @@ export class Studio {
 
   // ----- Toolbox inserts ---------------------------------------------------------------------------------------
 
-  /** Parent the Toolbox inserts into: the selected node if it can hold children, else the scene root. */
+  /**
+   * Parent the Toolbox inserts into: the selected node if it can hold children, the character of a selected bone,
+   * else the scene root.
+   */
   get insertParentId(): string | null {
     if (this.insertAtRoot) return null;
     const last = this.lastInsert;
     if (last && this.store.selectedId === last.id) return this.store.node(last.parent) ? last.parent : null;
+    const bone = this.store.selectedBone;
+    if (bone && this.store.node(bone.characterId)) return bone.characterId;
     return defaultInsertParent(this.store.nodes, this.store.selectedId);
+  }
+
+  /** Bone of the parent character that models and items are mounted on (a selected bone, or the last one used). */
+  get insertBone(): string | undefined {
+    if (this.insertAtRoot) return undefined;
+    const last = this.lastInsert;
+    if (last && this.store.selectedId === last.id) return last.bone;
+    return this.store.selectedBone?.bone;
   }
 
   /** Where the Toolbox will insert, for display. */
   get insertPath(): string {
     const id = this.insertParentId;
-    return id ? pathOf(this.store.nodes, id).join(' / ') : 'Scene root';
+    if (!id) return 'Scene root';
+    const path = pathOf(this.store.nodes, id).join(' / ');
+    const bone = this.insertBone;
+    return bone ? `${path} / ${bone.replace(/_/g, ' ')}` : path;
   }
 
-  private inserted(id: string, parent: string | null): string {
-    if (id) this.lastInsert = { id, parent };
+  private inserted(id: string, parent: string | null, bone?: string): string {
+    if (id) this.lastInsert = { id, parent, bone };
     return id;
   }
 
   insertModel(entry: ModelEntry, kind: 'prop' | 'npc'): string {
     const parent = this.insertParentId;
-    return this.inserted(this.addModel(entry, kind, { parentId: parent ?? undefined }), parent);
+    const bone = this.insertBone;
+    return this.inserted(this.addModel(entry, kind, { parentId: parent ?? undefined, bone }), parent, bone);
   }
 
   insertMap(entry: { id: string; name: string }): string {
@@ -128,7 +148,10 @@ export class Studio {
 
   /** The character an item inserted from the Toolbox is worn by (null: it goes on a new character). */
   get itemTarget() {
-    return this.insertAtRoot ? null : itemTargetCharacter(this.store.nodes, this.store.selectedId);
+    if (this.insertAtRoot) return null;
+    const bone = this.store.selectedBone;
+    if (bone) return this.store.node(bone.characterId) ?? null;
+    return itemTargetCharacter(this.store.nodes, this.store.selectedId);
   }
 
   /** Wear an item on the targeted character, or put it on a new base character of the given gender. */
@@ -136,7 +159,8 @@ export class Studio {
     const target = this.itemTarget;
     if (target) {
       const parent = this.insertParentId;
-      return this.inserted(this.commitItem({ nodeId: target.id }, item, color), parent);
+      const bone = this.insertBone;
+      return this.inserted(this.commitItem({ nodeId: target.id, bone }, item, color), parent, bone);
     }
     const parent = this.insertParentId;
     const id = this.store.addCharacter(
@@ -321,15 +345,25 @@ export class Studio {
 
   // ----- Add Child and menus --------------------------------------------------------------------------------------
 
-  openAddChild(nodeId: string, bone?: string) {
-    this.menu = null;
-    this.addTarget = { nodeId, bone };
+  /** Show the Toolbox and put the cursor in its search box. */
+  openToolbox() {
+    this.toolboxOpen = true;
+    this.toolboxFocus++;
   }
 
-  closeAddChild() {
-    this.runtime.clearItemPreview();
-    this.runtime.clearGhost();
-    this.addTarget = null;
+  /**
+   * "Add Child...": select the node (or bone) and show the Toolbox, which inserts into the selection and previews
+   * items on it. A character (or one of its bones) opens the Items tab.
+   */
+  addChild(nodeId: string, bone?: string) {
+    this.menu = null;
+    if (bone) this.store.selectBone(nodeId, bone);
+    else this.store.select(nodeId);
+    this.insertAtRoot = false;
+    const wearable = bone !== undefined || this.store.node(nodeId)?.kind === 'character';
+    if (wearable) this.toolboxTab = 'items';
+    else if (this.toolboxTab === 'items') this.toolboxTab = 'props';
+    this.openToolbox();
   }
 
   openMenu(x: number, y: number, target: MenuTarget) {
@@ -345,7 +379,7 @@ export class Studio {
     const store = this.store;
     if (target.type === 'bone') {
       return [
-        { label: 'Add Child...', action: () => this.openAddChild(target.characterId, target.bone) },
+        { label: 'Add Child...', action: () => this.addChild(target.characterId, target.bone) },
         { label: 'Select', action: () => store.selectBone(target.characterId, target.bone) }
       ];
     }
@@ -361,7 +395,7 @@ export class Studio {
     const id = node.id;
     const item = node.kind === 'item';
     return [
-      { label: 'Add Child...', action: () => this.openAddChild(id), disabled: item },
+      { label: 'Add Child...', action: () => this.addChild(id), disabled: item },
       { label: 'Rename', action: () => (this.renaming = id) },
       { label: 'Focus', action: () => this.focus(id) },
       { label: 'Duplicate', action: () => store.duplicate(id), disabled: item, separator: true },

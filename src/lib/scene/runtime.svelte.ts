@@ -25,7 +25,7 @@ import { getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig, type BoneInfo } from '../character/rig.js';
 import { exportGlb } from '../export/glb.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
-import type { ItemRecord, MapData } from '../types.js';
+import type { MapData } from '../types.js';
 import { DEFAULT_SKIN, type SceneNode } from './model.js';
 import type { LocalTransform } from './store.svelte.js';
 import { descendantsOf, rootOf } from './tree.js';
@@ -94,8 +94,6 @@ export class SceneRuntime {
   );
   private selection: { id: string | null; bone: { characterId: string; bone: string } | null } = { id: null, bone: null };
   private frame = 0;
-  private ghost: { object: Object3D; materials: Material[] } | null = null;
-  private ghostGen = 0;
 
   constructor() {
     this.box.visible = false;
@@ -603,69 +601,6 @@ export class SceneRuntime {
     return view.group.matrixWorld.clone();
   }
 
-  // ----- previews ---------------------------------------------------------------------------------------------
-
-  /** Show an item on a character without wearing it. Errors (no model for this gender) just show nothing. */
-  async previewItem(characterId: string, item: ItemRecord, colorIndex?: number) {
-    const rig = this.rigOf(characterId);
-    if (!rig) return;
-    const colors = await itemTint(item, colorIndex);
-    try {
-      await rig.previewEquip(item, colors);
-    } catch {
-      rig.clearPreview();
-    }
-    this.bump();
-  }
-
-  clearItemPreview(characterId?: string) {
-    for (const view of this.views.values()) {
-      if (characterId && view.id !== characterId) continue;
-      view.rig?.clearPreview();
-    }
-  }
-
-  /** Show a model as a see-through ghost under a node (or one of its bones). */
-  async previewModel(parentId: string | null, glb: string, bone?: string) {
-    this.clearGhost();
-    const gen = this.ghostGen;
-    try {
-      const { object } = await instantiate(glb);
-      if (gen !== this.ghostGen) return;
-      const materials: Material[] = [];
-      object.traverse((o) => {
-        const mesh = o as Mesh;
-        if (!mesh.isMesh) return;
-        const ghostly = (m: Material) => {
-          const clone = m.clone();
-          clone.transparent = true;
-          clone.opacity = 0.55;
-          materials.push(clone);
-          return clone;
-        };
-        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(ghostly) : ghostly(mesh.material);
-      });
-      let parent: Object3D = this.root;
-      if (parentId) {
-        const pv = this.views.get(parentId);
-        parent = pv?.group ?? this.root;
-        if (bone && pv?.rig) parent = pv.rig.resolve(bone) ?? parent;
-      }
-      parent.add(object);
-      this.ghost = { object, materials };
-    } catch {
-      // A model that fails to load simply has no preview.
-    }
-  }
-
-  clearGhost() {
-    this.ghostGen++;
-    if (!this.ghost) return;
-    this.ghost.object.removeFromParent();
-    for (const m of this.ghost.materials) m.dispose();
-    this.ghost = null;
-  }
-
   // ----- export -----------------------------------------------------------------------------------------------
 
   /**
@@ -709,7 +644,6 @@ export class SceneRuntime {
   // ----- lifecycle --------------------------------------------------------------------------------------------
 
   dispose() {
-    this.clearGhost();
     for (const view of this.views.values()) this.disposeView(view);
     this.views.clear();
     this.root.removeFromParent();

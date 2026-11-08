@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import Viewport from '#lib/components/Viewport.svelte';
   import { pathOf } from '#lib/scene/tree.js';
-  import AddChildPanel from '#lib/studio/AddChildPanel.svelte';
   import ContextMenu from '#lib/studio/ContextMenu.svelte';
   import { Studio } from '#lib/studio/controller.svelte.js';
   import Explorer from '#lib/studio/Explorer.svelte';
+  import MenuBar from '#lib/studio/MenuBar.svelte';
   import Properties from '#lib/studio/Properties.svelte';
   import Splitter from '#lib/studio/Splitter.svelte';
   import StudioScene from '#lib/studio/StudioScene.svelte';
@@ -16,7 +16,6 @@
   const runtime = studio.runtime;
 
   const LAYOUT_KEY = 'bs2.studio.layout';
-  let leftOpen = $state(true);
   let leftWidth = $state(340);
   let rightWidth = $state(320);
   let explorerHeight = $state(280);
@@ -28,7 +27,7 @@
     if (import.meta.env.DEV) (window as unknown as { __studio: Studio }).__studio = studio;
     try {
       const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}');
-      if (typeof saved.leftOpen === 'boolean') leftOpen = saved.leftOpen;
+      if (typeof saved.leftOpen === 'boolean') studio.toolboxOpen = saved.leftOpen;
       if (typeof saved.leftWidth === 'number') leftWidth = clamp(saved.leftWidth, 200, 600);
       if (typeof saved.rightWidth === 'number') rightWidth = clamp(saved.rightWidth, 220, 600);
       if (typeof saved.explorerHeight === 'number') explorerHeight = clamp(saved.explorerHeight, 100, 900);
@@ -45,7 +44,7 @@
 
   $effect(() => {
     if (!ready) return;
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen: studio.toolboxOpen, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
   });
 
   // Autosave on every change once the stored scene has been loaded.
@@ -96,23 +95,9 @@
     else if (!mod && key === 'f') studio.focus(id);
     else if (!mod && key === 'i') {
       e.preventDefault();
-      void openToolbox();
+      studio.openToolbox();
     }
-    else if (e.key === 'Escape' && !studio.addTarget) store.select(null);
-  }
-
-  /** Show the Toolbox and put the cursor in its search box. */
-  async function openToolbox() {
-    leftOpen = true;
-    await tick();
-    document.querySelector<HTMLInputElement>('.dock input[type=search]')?.focus();
-  }
-
-  async function importJson(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (file) await studio.importJson(file);
+    else if (e.key === 'Escape') store.select(null);
   }
 
   const status = $derived.by(() => {
@@ -126,66 +111,55 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="studio">
-  {#if leftOpen}
-    <aside class="dock" style:width={`${leftWidth}px`}>
-      {#if studio.addTarget}
-        <AddChildPanel {studio} />
-      {:else}
+<div class="app">
+  <MenuBar {studio} />
+  <div class="studio">
+    {#if studio.toolboxOpen}
+      <aside class="dock" style:width={`${leftWidth}px`}>
         <Toolbox {studio} />
-      {/if}
+      </aside>
+      <Splitter axis="x" onresize={(d) => (leftWidth = clamp(leftWidth + d, 200, 600))} />
+    {/if}
+
+    <section class="center">
+      <div class="toolbar">
+        <button class:active={studio.toolboxOpen} onclick={() => (studio.toolboxOpen = !studio.toolboxOpen)} title="Show or hide the Toolbox (I opens it)">Toolbox</button>
+        <span class="sep"></span>
+        <button class:active={store.mode === 'translate'} onclick={() => (store.mode = 'translate')} title="Move (G)">Move</button>
+        <button class:active={store.mode === 'rotate'} onclick={() => (store.mode = 'rotate')} title="Rotate (R)">Rotate</button>
+        <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (S)">Scale</button>
+        <label class="snap"><input type="checkbox" bind:checked={store.snap} /> snap</label>
+        <button onclick={() => studio.focus(store.selectedId)} disabled={!store.selectedId} title="Frame the selection (F)">Focus</button>
+      </div>
+
+      <div class="viewport">
+        <Viewport viewApi={studio.view} gridSize={4000} onTick={(d) => runtime.update(d)}>
+          <StudioScene {studio} />
+        </Viewport>
+      </div>
+
+      <div class="status">
+        <span class="path" title={status}>{status}</span>
+        {#if studio.message}<span class="msg">{studio.message}</span>{/if}
+        <span class="grow"></span>
+        <span>{store.nodes.length} nodes</span>
+      </div>
+    </section>
+
+    <Splitter axis="x" onresize={(d) => (rightWidth = clamp(rightWidth - d, 220, 600))} />
+
+    <aside class="right" style:width={`${rightWidth}px`}>
+      <div class="pane" style:height={`${explorerHeight}px`}>
+        <h3>Explorer</h3>
+        <div class="pane-body"><Explorer {studio} /></div>
+      </div>
+      <Splitter axis="y" onresize={(d) => (explorerHeight = clamp(explorerHeight + d, 100, 900))} />
+      <div class="pane fill">
+        <h3>Properties</h3>
+        <div class="pane-body"><Properties {studio} /></div>
+      </div>
     </aside>
-    <Splitter axis="x" onresize={(d) => (leftWidth = clamp(leftWidth + d, 200, 600))} />
-  {/if}
-
-  <section class="center">
-    <div class="toolbar">
-      <button class:active={leftOpen} onclick={() => (leftOpen = !leftOpen)} title="Show or hide the Toolbox (I opens it)">Toolbox</button>
-      <span class="sep"></span>
-      <button onclick={() => store.undo()} disabled={!store.canUndo} title="Undo (Ctrl+Z)">Undo</button>
-      <button onclick={() => store.redo()} disabled={!store.canRedo} title="Redo (Ctrl+Y)">Redo</button>
-      <span class="sep"></span>
-      <button class:active={store.mode === 'translate'} onclick={() => (store.mode = 'translate')} title="Move (G)">Move</button>
-      <button class:active={store.mode === 'rotate'} onclick={() => (store.mode = 'rotate')} title="Rotate (R)">Rotate</button>
-      <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (S)">Scale</button>
-      <label class="snap"><input type="checkbox" bind:checked={store.snap} /> snap</label>
-      <button onclick={() => studio.focus(store.selectedId)} disabled={!store.selectedId} title="Frame the selection (F)">Focus</button>
-      <span class="grow"></span>
-      <button onclick={() => studio.exportJson()}>Export JSON</button>
-      <label class="file">Import JSON<input type="file" accept="application/json" onchange={importJson} hidden /></label>
-      <button onclick={() => studio.exportGlb(null)} disabled={studio.busy === 'export' || store.nodes.length === 0}>
-        {studio.busy === 'export' ? 'Exporting...' : 'Export GLB'}
-      </button>
-      <button onclick={() => store.clear()} disabled={store.nodes.length === 0}>Clear</button>
-    </div>
-
-    <div class="viewport">
-      <Viewport viewApi={studio.view} gridSize={4000} onTick={(d) => runtime.update(d)}>
-        <StudioScene {studio} />
-      </Viewport>
-    </div>
-
-    <div class="status">
-      <span class="path" title={status}>{status}</span>
-      {#if studio.message}<span class="msg">{studio.message}</span>{/if}
-      <span class="grow"></span>
-      <span>{store.nodes.length} nodes</span>
-    </div>
-  </section>
-
-  <Splitter axis="x" onresize={(d) => (rightWidth = clamp(rightWidth - d, 220, 600))} />
-
-  <aside class="right" style:width={`${rightWidth}px`}>
-    <div class="pane" style:height={`${explorerHeight}px`}>
-      <h3>Explorer</h3>
-      <div class="pane-body"><Explorer {studio} /></div>
-    </div>
-    <Splitter axis="y" onresize={(d) => (explorerHeight = clamp(explorerHeight + d, 100, 900))} />
-    <div class="pane fill">
-      <h3>Properties</h3>
-      <div class="pane-body"><Properties {studio} /></div>
-    </div>
-  </aside>
+  </div>
 </div>
 
 {#if studio.menu}
@@ -195,9 +169,15 @@
 {/if}
 
 <style>
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
   .studio {
     display: flex;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     min-width: 0;
   }
   .dock,
@@ -293,12 +273,5 @@
     display: inline-flex;
     gap: 4px;
     align-items: center;
-  }
-  .file {
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    border-radius: 4px;
-    padding: 4px 8px;
   }
 </style>

@@ -8,29 +8,25 @@
     /** Gender the list is filtered for. */
     gender: Gender;
     wornIds: Set<string>;
-    /** Click action (an immediate pick). Ignored when `onselect` is given. */
-    onpick?: (item: ItemRecord) => void;
-    /** Select mode: click and arrow keys select a row, double click and Enter activate it. */
-    onselect?: (item: ItemRecord) => void;
+    /** Click and arrow keys select a row; double click and Enter activate it. */
+    onselect: (item: ItemRecord) => void;
     onactivate?: (item: ItemRecord) => void;
     selectedId?: string | null;
-    /** Called with the item under the mouse or keyboard focus, for live previews. */
-    onpreview?: (item: ItemRecord) => void;
   }
 
-  let { gender, wornIds, onpick, onselect, onactivate, selectedId = null, onpreview }: Props = $props();
+  let { gender, wornIds, onselect, onactivate, selectedId = null }: Props = $props();
 
-  /** Arrow keys move between rows; in select mode that selects, otherwise focus previews like hover does. */
+  /** Arrow keys move between rows and select them; Enter activates the focused row. */
   function onkeydown(e: KeyboardEvent) {
     const li = (e.target as HTMLElement).closest('li');
     const index = li ? [...li.parentElement!.children].indexOf(li) : -1;
-    if (onselect && e.key === 'Enter' && items[index]) {
+    if (e.key === 'Enter' && items[index]) {
       e.preventDefault();
       onactivate?.(items[index]);
       return;
     }
     const button = moveRowFocus(e);
-    if (!button || !onselect) return;
+    if (!button) return;
     const moved = button.closest('li')!;
     const next = items[[...moved.parentElement!.children].indexOf(moved)];
     if (next) onselect(next);
@@ -101,10 +97,8 @@
         <button
           class:worn={wornIds.has(item.id)}
           class:selected={item.id === selectedId}
-          onclick={() => (onselect ? onselect(item) : onpick?.(item))}
+          onclick={() => onselect(item)}
           ondblclick={() => onactivate?.(item)}
-          onmouseenter={() => onpreview?.(item)}
-          onfocus={() => onpreview?.(item)}
           title={`${item.name} (${item.id})`}
         >
           <img src={iconUrl(item.icon)} alt="" loading="lazy" onerror={hideBroken} />

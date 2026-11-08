@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { previewUrlForModel } from '#lib/assets/urls.js';
   import AssetBrowser from '#lib/components/AssetBrowser.svelte';
   import ItemBrowser from '#lib/components/ItemBrowser.svelte';
@@ -56,11 +56,24 @@
   });
 
   function setTab(next: Tab) {
-    if (next === studio.toolboxTab) return;
     studio.toolboxTab = next;
+  }
+
+  // Switching tabs (here, or by Add Child on a character) drops the selection: it belongs to the other list.
+  let lastTab = untrack(() => studio.toolboxTab);
+  $effect(() => {
+    const current = studio.toolboxTab;
+    if (current === lastTab) return;
+    lastTab = current;
     selected = null;
     added = 0;
-  }
+  });
+
+  let root = $state<HTMLDivElement>();
+  $effect(() => {
+    if (!studio.toolboxFocus) return;
+    void tick().then(() => root?.querySelector<HTMLInputElement>('input[type=search]')?.focus());
+  });
 
   // ----- characters tab -----
 
@@ -96,6 +109,22 @@
     new Set(store.nodes.filter((n) => n.parentId === target?.id && n.kind === 'item' && n.itemId).map((n) => n.itemId!))
   );
   const item = $derived(tab === 'items' ? (selected as ItemRecord | null) : null);
+  // The character the item is tried on: what it wears now, as a string so unrelated scene edits do not reload the preview.
+  const baseKey = $derived(
+    target
+      ? JSON.stringify({
+          skin: target.skin ?? 2,
+          items: store.nodes
+            .filter((n) => n.parentId === target.id && n.kind === 'item' && n.itemId)
+            .map((n) => ({ id: n.itemId!, ...(n.color !== undefined ? { color: n.color } : {}) }))
+        })
+      : ''
+  );
+  const into = $derived(
+    tab === 'items' && target
+      ? [target.name, studio.insertBone?.replace(/_/g, ' ')].filter(Boolean).join(' / ')
+      : studio.insertPath
+  );
   const itemColor = $derived(item ? (colorChoice[item.id] ?? item.defaultColor) : undefined);
 
   // ----- preview -----
@@ -116,7 +145,13 @@
         return { kind: 'character', gender: o.gender, skin: o.skin, items: o.items };
       }
       case 'items':
-        return { kind: 'item', item: s as ItemRecord, gender: itemTargetGender, color: itemColor };
+        return {
+          kind: 'item',
+          item: s as ItemRecord,
+          gender: itemTargetGender,
+          color: itemColor,
+          base: baseKey ? JSON.parse(baseKey) : undefined
+        };
     }
   });
 
@@ -178,10 +213,10 @@
   const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 </script>
 
-<div class="toolbox">
+<div class="toolbox" bind:this={root}>
   <div class="into" title="New things are added here">
     <span class="label">Insert into</span>
-    <span class="path" title={studio.insertPath}>{tab === 'items' && target ? target.name : studio.insertPath}</span>
+    <span class="path" title={into}>{into}</span>
     <label class="root"><input type="checkbox" bind:checked={studio.insertAtRoot} /> scene root</label>
   </div>
 
@@ -209,6 +244,7 @@
         />
       {/key}
     {:else if tab === 'items'}
+      {#if target}<p class="hint">Previewed on {target.name}, with what it wears now.</p>{/if}
       <div class="gender">
         <button class:active={itemTargetGender === 1} disabled={!!target} onclick={() => (itemGender = 1)}>Female</button>
         <button class:active={itemTargetGender === 0} disabled={!!target} onclick={() => (itemGender = 0)}>Male</button>

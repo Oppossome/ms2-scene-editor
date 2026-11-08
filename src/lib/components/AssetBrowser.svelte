@@ -6,23 +6,18 @@
     endpoint: string;
     placeholder?: string;
     selectedId?: string | null;
-    /** Click action (an immediate pick). Ignored when `onselect` is given. */
-    onpick?: (record: T) => void;
-    /** Select mode: click and arrow keys select a row, double click and Enter activate it. */
-    onselect?: (record: T) => void;
+    /** Click and arrow keys select a row; double click and Enter activate it. */
+    onselect: (record: T) => void;
     onactivate?: (record: T) => void;
     /** Thumbnail URL for a record, or an empty string for none. Failed images are hidden. */
     thumb?: (record: T) => string;
-    /** Called with the record under the mouse or keyboard focus, for live previews. */
-    onpreview?: (record: T) => void;
     /** Optional extra detail line per record. */
     detail?: (record: T) => string;
   }
 
-  let { endpoint, placeholder = 'Search...', selectedId = null, onpick, onselect, onactivate, thumb, onpreview, detail }: Props = $props();
+  let { endpoint, placeholder = 'Search...', selectedId = null, onselect, onactivate, thumb, detail }: Props = $props();
 
   function onkeydown(e: KeyboardEvent) {
-    if (!onselect) return;
     const li = (e.target as HTMLElement).closest('li');
     const index = li ? [...li.parentElement!.children].indexOf(li) : -1;
     if (e.key === 'Enter' && records[index]) {
@@ -84,10 +79,8 @@
       <li>
         <button
           class:selected={record.id === selectedId}
-          onclick={() => (onselect ? onselect(record) : onpick?.(record))}
+          onclick={() => onselect(record)}
           ondblclick={() => onactivate?.(record)}
-          onmouseenter={() => onpreview?.(record)}
-          onfocus={() => onpreview?.(record)}
           title={record.name}
         >
           {#if src}<img {src} alt="" loading="lazy" onerror={hideImage} />{/if}
