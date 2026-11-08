@@ -2,6 +2,8 @@
 
 > **AI disclaimer:** This project was made with the heavy assistance of AI. Review the code and behaviour before relying on it.
 
+<img width="2414" height="1837" alt="image" src="https://github.com/user-attachments/assets/7eeb2120-d1d8-4962-8da0-8e9655f4b612" />
+
 MS2SceneEditor is a local toolset for MapleStory 2, the Nexon game that has been discontinued. It has two parts:
 
 - **Extraction tools** (`cmd/extract/`) that unpack the game's files from a Steam install and convert them to open formats (GLB models, PNG textures, OGG audio, MP4 video).
