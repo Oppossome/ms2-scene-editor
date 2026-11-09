@@ -1,4 +1,5 @@
 import { parseChannelIndexes, type ChannelIndexes } from '../character/tint.js';
+import { isFaceExpression, type FaceExpression } from '../character/expressions.js';
 
 /** Saved outfits (localStorage). An outfit is what a character node wears, see `nodesToOutfit`. */
 
@@ -9,6 +10,7 @@ export interface OutfitSnapshot {
   skin: number;
   /** Eye colour (palette 3 index); outfits saved before it existed have none. */
   eye?: number;
+  expression?: FaceExpression;
   items: { id: string; color?: number; channels?: ChannelIndexes }[];
 }
 
@@ -36,7 +38,7 @@ export function parseSnapshot(data: unknown): OutfitSnapshot | null {
     items.push(entry);
   }
   const eye = typeof d.eye === 'number' && Number.isInteger(d.eye) && d.eye >= 0 ? d.eye : undefined;
-  return { version: 1, gender: d.gender, skin, ...(eye !== undefined ? { eye } : {}), items };
+  return { version: 1, gender: d.gender, skin, ...(eye !== undefined ? { eye } : {}), ...(isFaceExpression(d.expression) ? { expression: d.expression } : {}), items };
 }
 
 export function parseSnapshotJson(text: string): OutfitSnapshot | null {

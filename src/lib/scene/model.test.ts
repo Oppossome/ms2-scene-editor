@@ -9,6 +9,12 @@ const hat = node({ id: 'hat', kind: 'item', parentId: 'hero', itemId: '11400604'
 const crate = node({ id: 'crate', kind: 'prop', glb: 'Map/x.glb' });
 
 describe('parseScene', () => {
+  it('preserves manual face expressions in scenes and outfit snapshots', () => {
+    const scene = parseScene({ version: 1, nodes: [{ ...hero, expression: 'smile' }] })!;
+    expect(scene.nodes[0].expression).toBe('smile');
+    expect(nodesToOutfit(scene.nodes, 'hero')?.expression).toBe('smile');
+    expect(parseScene({ version: 1, nodes: [{ ...hero, expression: '../file' }] })?.nodes[0].expression).toBeUndefined();
+  });
   it('accepts a tree with items under a character', () => {
     const scene = parseScene({ version: 1, nodes: [hero, hat, crate] });
     expect(scene?.nodes.map((n) => n.id)).toEqual(['hero', 'hat', 'crate']);

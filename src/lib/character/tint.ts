@@ -116,10 +116,23 @@ export function tintPixel(base: Rgb, mask: MaskPixel, t0: Rgb, t1: Rgb, t2: Rgb)
 /** What a tinted material was built from; the exporter uses it to bake the tint into a texture. */
 export interface TintInfo {
   mask: Texture;
+  enabled: boolean;
   colors: () => TintColors;
 }
 const tintInfo = new WeakMap<Material, TintInfo>();
 export const getTintInfo = (material: Material) => tintInfo.get(material);
+const maskUniforms = new WeakMap<Material, { value: Texture }>();
+
+/** Update both the live shader and the texture mask used by GLB export. */
+export function setTintMask(material: Material, mask: Texture, enabled = true) {
+  const info = tintInfo.get(material);
+  const uniform = maskUniforms.get(material);
+  if (info && uniform) {
+    info.mask = mask;
+    info.enabled = enabled;
+    uniform.value = mask;
+  }
+}
 
 export interface TintHandle {
   /** True when at least one material of the object is tintable. */
@@ -133,7 +146,7 @@ export interface TintHandle {
 const loader = new TextureLoader();
 const maskCache = new Map<string, Promise<Texture>>();
 
-function loadMask(url: string): Promise<Texture> {
+export function loadMask(url: string): Promise<Texture> {
   let hit = maskCache.get(url);
   if (!hit) {
     hit = loader.loadAsync(url).then((tex) => {
@@ -228,10 +241,12 @@ export async function applyTint(
     if (!clone) {
       const mask = await loadMask(new URL(maskUri, base).href);
       const material = original.clone();
+      const maskUniform = { value: mask };
+      maskUniforms.set(material, maskUniform);
       material.userData = { ...original.userData };
       material.customProgramCacheKey = () => 'ms2-tint';
       material.onBeforeCompile = (shader) => {
-        shader.uniforms.tintMask = { value: mask };
+        shader.uniforms.tintMask = maskUniform;
         Object.assign(shader.uniforms, uniforms);
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <common>', COMMON_PATCH)
@@ -239,6 +254,7 @@ export async function applyTint(
       };
       tintInfo.set(material, {
         mask,
+        enabled: true,
         colors: () => ({ c0: uniforms.tint0.value, c1: uniforms.tint1.value, c2: uniforms.tint2.value })
       });
       clone = material;

@@ -4,6 +4,8 @@ import { bodyModel } from '../assets/urls.js';
 import type { ItemAsset, ItemRecord } from '../types.js';
 import { bodyMeshesForSlot, conflictingItems, pickAssets } from './slots.js';
 import { applyFaceTextures } from './face.js';
+import { FaceAnimator } from './face-animation.js';
+import type { FaceExpression } from './expressions.js';
 import { applyTint, type TintColors, type TintHandle } from './tint.js';
 
 /** The slot of face items. */
@@ -71,9 +73,11 @@ export class CharacterRig {
   private skinColors: TintColors | null = null;
   /** The eye colours in effect (the face's iris regions); without any the whole body follows the skin. */
   private eyeColors: TintColors | null = null;
+  private readonly face: FaceAnimator;
 
   private constructor(gender: 0 | 1, body: Object3D) {
     this.gender = gender;
+    this.face = new FaceAnimator(gender);
     this.body = body;
     this.root.add(body);
     body.traverse((o) => {
@@ -93,7 +97,31 @@ export class CharacterRig {
     if (skin) rig.skinColors = skin;
     if (eye) rig.eyeColors = eye;
     if (skin || eye) rig.skinTint = await applyTint(object, bodyModel(gender), eye ?? skin ?? null, skin ?? null);
+    if (!rig.skinTint) {
+      const face = rig.bodyParts.get(FACE_SLOT);
+      if (face instanceof Mesh) {
+        face.material = Array.isArray(face.material) ? face.material.map((material) => material.clone()) : face.material.clone();
+      }
+    }
+    rig.refreshFace();
     return rig;
+  }
+
+  private refreshFace() {
+    const item = this.itemInSlot(FACE_SLOT);
+    const equipped = item ? this.equipped.get(item.id) : undefined;
+    const bodyFace = this.bodyParts.get(FACE_SLOT);
+    this.face.setTargets(equipped && !equipped.userHidden ? equipped.objects : bodyFace ? [bodyFace] : []);
+  }
+
+  updateFace(clip: string, seconds: number, expression?: FaceExpression) {
+    const item = this.itemInSlot(FACE_SLOT);
+    const visibleItem = item && !this.equipped.get(item.id)?.userHidden ? item.id : undefined;
+    this.face.update(clip, seconds, expression, visibleItem);
+  }
+
+  async faceReady() {
+    await this.face.ready();
   }
 
   setEyeColors(colors: TintColors) {
@@ -161,6 +189,7 @@ export class CharacterRig {
     eq.userHidden = !visible;
     if (visible) this.switchOn(eq);
     else this.switchOff(eq);
+    if (eq.slots.includes(FACE_SLOT)) this.refreshFace();
   }
 
   /** The skeleton as a tree: bones and dummy nodes of the body, without anything added by items. */
@@ -211,6 +240,7 @@ export class CharacterRig {
     const eq = this.install(item, assets, glbs, loaded);
     this.equipped.set(item.id, eq);
     for (const slot of slots) this.slotOwner.set(slot, item.id);
+    if (slots.includes(FACE_SLOT)) this.refreshFace();
     this.onChange?.();
   }
 
@@ -220,6 +250,7 @@ export class CharacterRig {
     this.release(eq);
     for (const slot of eq.slots) if (this.slotOwner.get(slot) === itemId) this.slotOwner.delete(slot);
     this.equipped.delete(itemId);
+    if (eq.slots.includes(FACE_SLOT)) this.refreshFace();
     this.onChange?.();
   }
 
@@ -231,6 +262,7 @@ export class CharacterRig {
   dispose() {
     this.disposed = true;
     for (const id of [...this.equipped.keys()]) this.unequip(id);
+    this.face.dispose();
     this.root.removeFromParent();
   }
 

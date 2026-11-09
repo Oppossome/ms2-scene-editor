@@ -14,6 +14,7 @@ import {
   type Vec3
 } from './model.js';
 import type { ChannelIndexes } from '../character/tint.js';
+import type { FaceExpression } from '../character/expressions.js';
 import { canParent, cloneSubtree, deleteSubtree, moveNode, uniqueName } from './tree.js';
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
@@ -32,6 +33,7 @@ export interface NewNode {
   gender?: 0 | 1;
   skin?: number;
   eye?: number;
+  expression?: FaceExpression;
   itemId?: string;
   color?: number;
   channelColors?: ChannelIndexes;
@@ -82,6 +84,7 @@ const toNode = (spec: NewNode, parentId: string | null): SceneNode => {
     node.gender = spec.gender ?? 1;
     node.skin = spec.skin ?? DEFAULT_SKIN;
     node.eye = spec.eye ?? DEFAULT_EYE;
+    if (spec.expression) node.expression = spec.expression;
   }
   if (spec.kind === 'item') {
     node.itemId = spec.itemId;
@@ -232,7 +235,7 @@ export class SceneState {
 
   /** A character with its outfit, in one undo step. */
   addCharacter(
-    spec: { name: string; gender: 0 | 1; skin?: number; eye?: number; parentId?: string | null; position?: Vec3 },
+    spec: { name: string; gender: 0 | 1; skin?: number; eye?: number; expression?: FaceExpression; parentId?: string | null; position?: Vec3 },
     items: NewItem[] = []
   ): string {
     const parentId = parentIn(this.nodes, { kind: 'character', name: spec.name, parentId: spec.parentId });
@@ -245,6 +248,7 @@ export class SceneState {
         gender: spec.gender,
         skin: spec.skin,
         eye: spec.eye,
+        expression: spec.expression,
         position: spec.position
       },
       parentId

@@ -128,6 +128,7 @@
       ? JSON.stringify({
           skin: target.skin ?? 2,
           eye: target.eye ?? DEFAULT_EYE,
+          expression: target.expression,
           items: store.nodes
             .filter((n) => n.parentId === target.id && n.kind === 'item' && n.itemId)
             .map((n) => ({
@@ -176,7 +177,7 @@
         return { kind: 'map', id: (s as MapEntry).id };
       case 'characters': {
         const o = (s as OutfitEntry).snapshot;
-        return { kind: 'character', gender: o.gender, skin: o.skin, eye: o.eye, items: o.items };
+        return { kind: 'character', gender: o.gender, skin: o.skin, eye: o.eye, expression: o.expression, items: o.items };
       }
       case 'items':
         return {

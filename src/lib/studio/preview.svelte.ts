@@ -5,6 +5,7 @@ import { instantiate, loadClips } from '../assets/loader.js';
 import { bodyClipDir } from '../assets/urls.js';
 import { eyeTint, getItem, itemTint, skinTint } from '../character/build.js';
 import { CharacterRig } from '../character/rig.js';
+import type { FaceExpression } from '../character/expressions.js';
 import type { ChannelIndexes } from '../character/tint.js';
 import { buildMap, type BuiltMap } from '../maps/instancing.js';
 import { DEFAULT_EYE, DEFAULT_SKIN } from '../scene/model.js';
@@ -21,7 +22,7 @@ export interface PreviewItem {
 export type PreviewSource =
   | { kind: 'model'; glb: string; scale?: number; clip?: string }
   | { kind: 'map'; id: string }
-  | { kind: 'character'; gender: 0 | 1; skin?: number; eye?: number; items: PreviewItem[]; clip?: string }
+  | { kind: 'character'; gender: 0 | 1; skin?: number; eye?: number; expression?: FaceExpression; items: PreviewItem[]; clip?: string }
   | {
       kind: 'item';
       item: ItemRecord;
@@ -29,7 +30,7 @@ export type PreviewSource =
       color?: number;
       channels?: ChannelIndexes;
       /** The character the item is tried on (its skin, eyes and what it already wears); a bare body when omitted. */
-      base?: { skin: number; eye?: number; items: PreviewItem[] };
+      base?: { skin: number; eye?: number; expression?: FaceExpression; items: PreviewItem[] };
     };
 
 /**
@@ -63,6 +64,7 @@ export class PreviewController {
   private map: BuiltMap | null = null;
   private embedded: AnimationClip[] = [];
   private bodyGender: 0 | 1 | null = null;
+  private expression: FaceExpression | undefined;
 
   /** Show a source, or nothing for null. */
   async show(source: PreviewSource | null) {
@@ -144,6 +146,7 @@ export class PreviewController {
     const rig = await CharacterRig.create(s.gender, await skinTint(s.skin ?? DEFAULT_SKIN), await eyeTint(s.eye ?? DEFAULT_EYE));
     if (gen !== this.gen) return rig.dispose();
     this.attachRig(rig, s.gender);
+    this.expression = s.expression;
     this.frameToken++;
     this.status = '';
     if (!(await this.wear(rig, s.items, gen))) return;
@@ -170,6 +173,7 @@ export class PreviewController {
     );
     if (gen !== this.gen) return rig.dispose();
     this.attachRig(rig, s.gender);
+    this.expression = s.base?.expression;
     this.frameToken++;
     this.status = '';
     // What the character already wears first; the new item then replaces whatever shares its slot.
@@ -242,6 +246,7 @@ export class PreviewController {
   /** Call every frame. */
   update(delta: number) {
     this.player?.update(delta);
+    this.rig?.updateFace(this.player?.clip?.name ?? '', this.player?.time ?? 0, this.expression);
   }
 
   private release() {
@@ -252,6 +257,7 @@ export class PreviewController {
     this.map?.dispose();
     this.map = null;
     this.bodyGender = null;
+    this.expression = undefined;
     this.embedded = [];
     this.object = null;
     this.status = '';

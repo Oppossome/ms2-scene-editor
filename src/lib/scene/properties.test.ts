@@ -32,6 +32,15 @@ const sections = (c: PropContext) => describeNode(c).map((s) => s.section);
 const row = (c: PropContext, key: string) => describeNode(c).flatMap((s) => s.rows).find((r) => r.key === key);
 
 describe('describeNode', () => {
+  it('offers automatic faces and manual expressions only for characters', () => {
+    const c = ctx(node({ kind: 'character', expression: 'smile' }));
+    expect(row(c, 'expression')).toMatchObject({ type: 'enum', value: 'smile' });
+    expect(row(c, 'expression')?.options).toContainEqual({ value: '', label: 'Automatic (animation)' });
+    expect(row(ctx(node()), 'expression')).toBeUndefined();
+    expect(applyChange('expression', 'smile')).toEqual({ expression: 'smile' });
+    expect(applyChange('expression', '')).toEqual({ expression: undefined });
+    expect(applyChange('expression', 'arbitrary.png')).toBeNull();
+  });
   it('shows Data, Transform, Appearance, Source and Behaviour for a prop', () => {
     expect(sections(ctx(node()))).toEqual(['Data', 'Transform', 'Appearance', 'Source', 'Behaviour']);
   });

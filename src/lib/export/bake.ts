@@ -25,6 +25,7 @@ function readPixels(image: Drawable, width: number, height: number): Uint8Clampe
  */
 export function bakeTintedMaterial(material: MeshStandardMaterial): MeshStandardMaterial | null {
   const info = getTintInfo(material);
+  if (!info?.enabled) return null;
   const base = material.map?.image as Drawable | undefined;
   const mask = info?.mask.image as Drawable | undefined;
   if (!info || !base || !mask) return null;

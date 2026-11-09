@@ -39,7 +39,7 @@
           ...(n.color !== undefined ? { color: n.color } : {}),
           ...(n.channelColors ? { channels: n.channelColors } : {})
         }));
-      return { kind: 'character', gender: node.gender ?? 1, skin: node.skin, eye: node.eye, items };
+      return { kind: 'character', gender: node.gender ?? 1, skin: node.skin, eye: node.eye, expression: node.expression, items };
     }
     return node.glb ? { kind: 'model', glb: node.glb, scale: node.scale[0] } : null;
   });

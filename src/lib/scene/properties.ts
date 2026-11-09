@@ -1,5 +1,6 @@
 import type { ClipInfo } from '../types.js';
 import { DEFAULT_EYE, FRAME_RATE, type SceneNode, type Vec3 } from './model.js';
+import { FACE_OVERRIDES, isFaceExpression } from '../character/expressions.js';
 
 export type PropType = 'string' | 'number' | 'vec3' | 'bool' | 'enum' | 'clip' | 'palette' | 'readonly' | 'action' | 'transport';
 
@@ -144,6 +145,10 @@ export function describeNode(ctx: PropContext): PropSection[] {
 
   add('Appearance', [
     { key: 'visible', label: 'Visible', type: 'bool', value: node.visible },
+    node.kind === 'character' ? {
+      key: 'expression', label: 'Expression', type: 'enum', value: node.expression ?? '',
+      options: [{ value: '', label: 'Automatic (animation)' }, ...FACE_OVERRIDES.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) }))]
+    } : null,
     node.kind === 'character'
       ? {
           key: 'gender',
@@ -230,6 +235,8 @@ export function applyChange(key: string, value: unknown, node?: SceneNode, env: 
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { skin: value } : null;
     case 'eye':
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { eye: value } : null;
+    case 'expression':
+      return value === '' ? { expression: undefined } : isFaceExpression(value) ? { expression: value } : null;
     case 'color':
       // Picking a colour set starts over: every channel follows it again.
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { color: value, channelColors: undefined } : null;

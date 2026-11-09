@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dropSkeletonRoots, editGlbJson, safeFilename } from '../export/glb';
-import { Color } from 'three';
+import { bakeTintedMaterial } from '../export/bake';
+import { Color, Mesh, MeshStandardMaterial, Texture, TextureLoader } from 'three';
 import {
   isSkinMask,
+  applyTint,
+  getTintInfo,
+  setTintMask,
   parseChannelIndexes,
   tintFromPalette,
   tintPixel
@@ -14,6 +18,30 @@ const grey: [number, number, number] = [0.3, 0.3, 0.3];
 const red: [number, number, number] = [0.8, 0.1, 0.1];
 const green: [number, number, number] = [0.1, 0.8, 0.1];
 const blue: [number, number, number] = [0.1, 0.1, 0.8];
+
+it('updates the exported face mask without losing live eye colours', async () => {
+  const mask = new Texture<HTMLImageElement>();
+  const loader = vi.spyOn(TextureLoader.prototype, 'loadAsync').mockResolvedValue(mask);
+  try {
+    const material = new MeshStandardMaterial({ map: new Texture() });
+    material.userData = { ms2: { shader0: 'dynamic_face_mask.png' } };
+    const mesh = new Mesh(undefined, material);
+    const colors = { c0: new Color('red'), c1: new Color('green'), c2: new Color('blue') };
+    const tint = await applyTint(mesh, 'Character/male/m_body.glb', colors);
+    const replacement = new Texture();
+    setTintMask(mesh.material, replacement);
+    expect(getTintInfo(mesh.material)?.mask).toBe(replacement);
+    setTintMask(mesh.material, replacement, false);
+    expect(bakeTintedMaterial(mesh.material)).toBeNull();
+    setTintMask(mesh.material, replacement);
+    expect(getTintInfo(mesh.material)?.enabled).toBe(true);
+    tint?.setColors({ ...colors, c0: new Color('yellow') });
+    expect(getTintInfo(mesh.material)?.colors().c0.getHexString()).toBe('ffff00');
+    expect(getTintInfo(mesh.material)?.mask).toBe(replacement);
+  } finally {
+    loader.mockRestore();
+  }
+});
 
 describe('isSkinMask', () => {
   it('recognises the body masks used by the skin parts of clothes', () => {

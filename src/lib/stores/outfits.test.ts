@@ -21,6 +21,10 @@ class MemoryStorage {
 const snap: OutfitSnapshot = { version: 1, gender: 1, skin: 3, items: [{ id: '11400604', color: 2 }, { id: '10200001' }] };
 
 describe('parseSnapshot', () => {
+  it('round-trips manual expressions and drops invalid ones', () => {
+    expect(parseSnapshot({ ...snap, expression: 'smile' })?.expression).toBe('smile');
+    expect(parseSnapshot({ ...snap, expression: '../file' })).not.toHaveProperty('expression');
+  });
   it('accepts a valid snapshot', () => {
     expect(parseSnapshot(snap)).toEqual(snap);
   });

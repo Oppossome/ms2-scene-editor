@@ -286,6 +286,7 @@ export class SceneRuntime {
     if (view.player) view.player.mixer.timeScale = node.speed ?? 1;
     if (!prev || prev.clip !== node.clip) void this.playClip(view);
     else if (prev.freeze !== node.freeze) this.applyFreeze(view);
+    view.rig?.updateFace(view.player?.clip?.name ?? '', view.player?.time ?? 0, node.expression);
   }
 
   private applyTransform(object: Object3D, node: SceneNode) {
@@ -437,7 +438,10 @@ export class SceneRuntime {
       const clip = view.embedded.find((c) => c.name === name);
       if (clip) player.play(clip, true);
     }
-    if (view.player === player) this.applyFreeze(view);
+    if (view.player === player) {
+      this.applyFreeze(view);
+      view.rig?.updateFace(player.clip?.name ?? '', player.time, view.node.expression);
+    }
   }
 
   /** Hold the clip on the node's freeze frame, or let it play again. */
@@ -555,6 +559,7 @@ export class SceneRuntime {
       itemView.group = rig.mountsOf(node.itemId)[0] ?? itemView.placeholder;
     }
     this.applyItemNodes(view, items);
+    rig.updateFace(view.player?.clip?.name ?? '', view.player?.time ?? 0, view.node.expression);
     this.bump();
   }
 
@@ -562,7 +567,10 @@ export class SceneRuntime {
 
   /** Call every frame. */
   update(delta: number) {
-    for (const view of this.views.values()) view.player?.update(delta);
+    for (const view of this.views.values()) {
+      view.player?.update(delta);
+      view.rig?.updateFace(view.player?.clip?.name ?? '', view.player?.time ?? 0, view.node.expression);
+    }
     this.frame++;
     if (this.frame % 6 === 0) this.updateOverlay();
   }
@@ -715,6 +723,13 @@ export class SceneRuntime {
       .filter((v): v is View => !!v && v.node.visible && v.node.kind !== 'map' && v.node.kind !== 'item')
       .map((v) => v.group);
     if (!objects.length) return null;
+    for (const id of members) {
+      const view = this.views.get(id);
+      if (view?.rig) {
+        view.rig.updateFace(view.player?.clip?.name ?? '', view.player?.time ?? 0, view.node.expression);
+        await view.rig.faceReady();
+      }
+    }
 
     const restore: (() => void)[] = [];
     for (const view of this.views.values()) {

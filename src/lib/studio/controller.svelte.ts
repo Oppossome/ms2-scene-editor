@@ -238,7 +238,7 @@ export class Studio {
   async addCharacter(name: string, snapshot: OutfitSnapshot, parentId?: string): Promise<string> {
     const items = await this.outfitItems(snapshot);
     return this.store.addCharacter(
-      { name, gender: snapshot.gender, skin: snapshot.skin, eye: snapshot.eye, parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() },
+      { name, gender: snapshot.gender, skin: snapshot.skin, eye: snapshot.eye, expression: snapshot.expression, parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() },
       items
     );
   }
@@ -256,8 +256,8 @@ export class Studio {
     if (!character || character.kind !== 'character') return;
     const items = await this.outfitItems(snapshot);
     const eye = snapshot.eye ?? DEFAULT_EYE;
-    if (character.gender !== snapshot.gender || character.skin !== snapshot.skin || (character.eye ?? DEFAULT_EYE) !== eye) {
-      this.store.update(characterId, { gender: snapshot.gender, skin: snapshot.skin, eye });
+    if (character.gender !== snapshot.gender || character.skin !== snapshot.skin || (character.eye ?? DEFAULT_EYE) !== eye || character.expression !== snapshot.expression) {
+      this.store.update(characterId, { gender: snapshot.gender, skin: snapshot.skin, eye, expression: snapshot.expression });
     }
     this.store.setOutfit(characterId, items);
   }

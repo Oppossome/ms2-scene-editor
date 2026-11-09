@@ -1,5 +1,6 @@
 import { parseChannelIndexes, type ChannelIndexes } from '../character/tint.js';
 import type { OutfitSnapshot } from '../stores/outfits.js';
+import { isFaceExpression, type FaceExpression } from '../character/expressions.js';
 
 /**
  * The scene is a flat list of nodes linked by `parentId`. The array order is the sibling order, which keeps
@@ -32,6 +33,8 @@ export interface SceneNode {
   skin?: number;
   /** Eye colour (palette 3 index) of a character's own face. */
   eye?: number;
+  /** Omitted: use the face sequence belonging to the current animation. */
+  expression?: FaceExpression;
   /** Item id and palette colour (items). `slots` lets the data layer resolve slot conflicts without a lookup. */
   itemId?: string;
   color?: number;
@@ -100,6 +103,7 @@ function parseNode(raw: unknown): SceneNode | null {
     node.gender = o.gender;
     node.skin = isNum(o.skin) && Number.isInteger(o.skin) && o.skin >= 0 ? o.skin : DEFAULT_SKIN;
     node.eye = isNum(o.eye) && Number.isInteger(o.eye) && o.eye >= 0 ? o.eye : DEFAULT_EYE;
+    if (isFaceExpression(o.expression)) node.expression = o.expression;
   } else if (kind === 'item') {
     if (typeof o.itemId !== 'string' || !/^\d+$/.test(o.itemId)) return null;
     node.itemId = o.itemId;
@@ -188,6 +192,7 @@ export function nodesToOutfit(nodes: SceneNode[], characterId: string): OutfitSn
     gender: character.gender ?? 1,
     skin: character.skin ?? DEFAULT_SKIN,
     eye: character.eye ?? DEFAULT_EYE,
+    ...(character.expression ? { expression: character.expression } : {}),
     items: nodes
       .filter((n) => n.parentId === characterId && n.kind === 'item' && n.itemId)
       .map((n) => ({
