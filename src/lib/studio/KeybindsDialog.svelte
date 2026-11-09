@@ -23,7 +23,7 @@
       rows: [
         { action: 'Move', keys: [['G']] },
         { action: 'Rotate', keys: [['R']] },
-        { action: 'Scale', keys: [['E']] },
+        { action: 'Scale', keys: [['T']] },
         { action: 'Focus selection', keys: [['F']] }
       ]
     },
@@ -39,8 +39,8 @@
       rows: [
         { action: 'Forward / back (look direction)', keys: [['W'], ['S']] },
         { action: 'Strafe left / right', keys: [['A'], ['D']] },
-        { action: 'Rise', keys: [['Space']] },
-        { action: 'Descend', keys: [['Ctrl']] }
+        { action: 'Rise', keys: [['E']] },
+        { action: 'Descend', keys: [['Q']] }
       ]
     }
   ];

@@ -86,11 +86,8 @@
     if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
     const key = e.key.toLowerCase();
     if (!Object.hasOwn(FLY_KEYS, key)) return;
-    // Ctrl is itself a flying key, so only other modifiers block input.
-    if (key !== 'control' && (e.ctrlKey || e.metaKey || e.altKey)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     held.add(key);
-    // Space would otherwise scroll the page while flying.
-    if (key === ' ') e.preventDefault();
   }
 
   function onKeyUp(e: KeyboardEvent) {
@@ -114,7 +111,7 @@
     // Strafing stays level, so A/D never climb; W/S follow the full look vector.
     forward.copy(look).setY(0).normalize();
     right.crossVectors(forward, UP).normalize();
-    // Space and Shift move along the camera's own up, which tilts with the view.
+    // E and Q move along the camera's own up, which tilts with the view.
     up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
 
     // Speed scales with the distance to the target, so close and far views both feel usable.
