@@ -81,6 +81,8 @@ export class Studio {
   pickingBackdrop = $state(false);
   /** The About dialog is open. */
   showAbout = $state(false);
+  /** The Keybinds dialog is open. */
+  showKeybinds = $state(false);
   /** The Report an issue dialog is open. */
   showReportIssue = $state(false);
   /** Toolbox (the left dock): shown or hidden. */
