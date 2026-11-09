@@ -139,8 +139,12 @@
         <button class:active={store.mode === 'translate'} onclick={() => (store.mode = 'translate')} title="Move (G)">Move</button>
         <button class:active={store.mode === 'rotate'} onclick={() => (store.mode = 'rotate')} title="Rotate (R)">Rotate</button>
         <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (T)">Scale</button>
+        {#if store.mode === 'translate'}
+          <span class="sep"></span>
+          <button class:active={store.space === 'local'} onclick={() => (store.space = 'local')} title="Move along the selected node's local axes">Local</button>
+          <button class:active={store.space === 'world'} onclick={() => (store.space = 'world')} title="Move along the world's axes">World</button>
+        {/if}
         <label class="snap"><input type="checkbox" bind:checked={store.snap} /> snap</label>
-        <button onclick={() => studio.focus(store.selectedId)} disabled={!store.selectedId} title="Frame the selection (F)">Focus</button>
       </div>
 
       <div class="viewport">

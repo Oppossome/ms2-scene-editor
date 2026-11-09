@@ -411,6 +411,13 @@ export class Studio {
     if (node) this.store.update(id, { locked: !node.locked });
   }
 
+  centerGroup(id: string): boolean {
+    const positions = this.runtime.groupCenterPositions(id);
+    if (!positions) return false;
+    this.store.updatePositions(positions);
+    return true;
+  }
+
   // ----- Add Child and menus --------------------------------------------------------------------------------------
 
   /** Show the Toolbox and put the cursor in its search box. */

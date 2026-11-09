@@ -17,6 +17,7 @@ import type { ChannelIndexes } from '../character/tint.js';
 import { canParent, cloneSubtree, deleteSubtree, moveNode, uniqueName } from './tree.js';
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
+export type GizmoSpace = 'local' | 'world';
 
 export interface NewNode {
   kind: NodeKind;
@@ -107,6 +108,7 @@ export class SceneState {
   selectedId = $state<string | null>(null);
   selectedBone = $state.raw<BoneSelection | null>(null);
   mode = $state<GizmoMode>('translate');
+  space = $state<GizmoSpace>('world');
   snap = $state(false);
   /** Explorer open state by key (node id, or `skel:<characterId>` / `bone:<characterId>:<name>`). */
   expanded = $state.raw<Record<string, boolean>>({});
@@ -284,6 +286,21 @@ export class SceneState {
     if (!this.node(id)) return;
     if (record) this.record();
     this.nodes = this.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n));
+  }
+
+  /** Update several node positions in one undo step. */
+  updatePositions(updates: { id: string; position: Vec3 }[]) {
+    const positions = new Map(updates.map(({ id, position }) => [id, position]));
+    const changed = this.nodes.some((node) => {
+      const position = positions.get(node.id);
+      return position && node.position.some((value, axis) => value !== position[axis]);
+    });
+    if (!changed) return;
+    this.record();
+    this.nodes = this.nodes.map((node) => {
+      const position = positions.get(node.id);
+      return position ? { ...node, position: [...position] as Vec3 } : node;
+    });
   }
 
   rename(id: string, name: string) {

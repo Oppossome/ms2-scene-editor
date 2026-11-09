@@ -601,6 +601,42 @@ export class SceneRuntime {
     return view ? [view.group] : [];
   }
 
+  /** Group position and direct-child positions that center its origin without changing child world positions. */
+  groupCenterPositions(id: string): { id: string; position: [number, number, number] }[] | null {
+    void this.version;
+    const node = this.byId.get(id);
+    const view = this.views.get(id);
+    if (!node || node.kind !== 'group' || !view) return null;
+
+    const children = this.nodes.filter((n) => n.parentId === id && n.kind !== 'item');
+    const roots = children.map((child) => this.views.get(child.id)?.group).filter((o): o is Group => !!o);
+    if (roots.length === 0) return null;
+    const bounds = visibleBounds(roots);
+    if (bounds.isEmpty()) return null;
+
+    const parent = view.group.parent ?? this.root;
+    parent.updateWorldMatrix(true, false);
+    if (Math.abs(parent.matrixWorld.determinant()) < 1e-12) return null;
+    const center = bounds.getCenter(new Vector3()).applyMatrix4(parent.matrixWorld.clone().invert());
+    const delta = center.clone().sub(view.group.position);
+    const scale = view.group.scale;
+    if (Math.abs(scale.x) < 1e-12 || Math.abs(scale.y) < 1e-12 || Math.abs(scale.z) < 1e-12) return null;
+
+    const childOffset = delta
+      .applyQuaternion(view.group.quaternion.clone().invert())
+      .divide(scale)
+      .negate();
+    return [
+      { id, position: [center.x, center.y, center.z] },
+      ...children.flatMap((child) => {
+        const childView = this.views.get(child.id);
+        if (!childView) return [];
+        const position = childView.group.position.clone().add(childOffset);
+        return [{ id: child.id, position: [position.x, position.y, position.z] as [number, number, number] }];
+      })
+    ];
+  }
+
   // ----- picking ---------------------------------------------------------------------------------------------
 
   /** The node under a point (normalised device coordinates). `top` returns the root ancestor instead. */

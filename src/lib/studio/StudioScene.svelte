@@ -55,6 +55,7 @@
     <TransformControls
       object={target}
       mode={store.mode}
+      space={store.space}
       translationSnap={store.snap ? 10 : undefined}
       rotationSnap={store.snap ? Math.PI / 12 : undefined}
       scaleSnap={store.snap ? 0.1 : undefined}

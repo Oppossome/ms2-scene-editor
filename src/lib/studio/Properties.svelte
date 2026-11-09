@@ -18,6 +18,7 @@
 
   const selected = $derived(store.selected);
   const bone = $derived(store.selectedBone);
+  const groupCenterPositions = $derived.by(() => (selected?.kind === 'group' ? runtime.groupCenterPositions(selected.id) : null));
 
   let itemRecord = $state.raw<ItemRecord | null>(null);
   $effect(() => {
@@ -172,6 +173,14 @@
             </div>
           </div>
         {/each}
+        {#if section.section === 'Transform' && selected?.kind === 'group'}
+          <div class="extra">
+            <button onclick={() => studio.centerGroup(selected.id)} disabled={!groupCenterPositions} title="Center the group on its children's visible bounds without moving them">
+              Center on children
+            </button>
+            <p class="hint">Moves the group origin to the center of its children's visible bounds; their world positions stay unchanged.</p>
+          </div>
+        {/if}
       </details>
     {/each}
 

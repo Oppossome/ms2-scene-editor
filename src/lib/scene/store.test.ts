@@ -175,6 +175,24 @@ describe('SceneState reparent', () => {
   });
 });
 
+describe('SceneState updatePositions', () => {
+  it('updates multiple nodes in one undo step', () => {
+    const s = new SceneState();
+    const group = s.add({ kind: 'group', name: 'Group' });
+    const child = s.add({ kind: 'prop', name: 'Child', glb: 'child.glb', parentId: group });
+    s.updatePositions([
+      { id: group, position: [10, 20, 30] },
+      { id: child, position: [-10, -20, -30] }
+    ]);
+
+    expect(s.node(group)?.position).toEqual([10, 20, 30]);
+    expect(s.node(child)?.position).toEqual([-10, -20, -30]);
+    s.undo();
+    expect(s.node(group)?.position).toEqual([0, 0, 0]);
+    expect(s.node(child)?.position).toEqual([0, 0, 0]);
+  });
+});
+
 describe('SceneState history and persistence', () => {
   it('undoes and redoes node changes', () => {
     const s = new SceneState();
