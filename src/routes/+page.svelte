@@ -100,7 +100,7 @@
       studio.renaming = id;
     } else if (!mod && key === 'g') store.mode = 'translate';
     else if (!mod && key === 'r') store.mode = 'rotate';
-    else if (!mod && key === 's') store.mode = 'scale';
+    else if (!mod && key === 'e') store.mode = 'scale';
     else if (!mod && key === 'f') studio.focus(id);
     else if (!mod && id && FRAME_KEYS[e.key]) studio.stepFrame(id, FRAME_KEYS[e.key]);
     else if (!mod && key === 'i') {
@@ -137,7 +137,7 @@
         <span class="sep"></span>
         <button class:active={store.mode === 'translate'} onclick={() => (store.mode = 'translate')} title="Move (G)">Move</button>
         <button class:active={store.mode === 'rotate'} onclick={() => (store.mode = 'rotate')} title="Rotate (R)">Rotate</button>
-        <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (S)">Scale</button>
+        <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (E)">Scale</button>
         <label class="snap"><input type="checkbox" bind:checked={store.snap} /> snap</label>
         <button onclick={() => studio.focus(store.selectedId)} disabled={!store.selectedId} title="Frame the selection (F)">Focus</button>
       </div>

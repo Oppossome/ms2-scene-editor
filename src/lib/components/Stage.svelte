@@ -4,6 +4,7 @@
   import type { ViewApi } from './viewapi.js';
   import { untrack } from 'svelte';
   import { Box3, Vector3, type Fog, type Object3D, type PerspectiveCamera } from 'three';
+  import { FLY_KEYS } from './camera-keys.js';
   import { fogRange } from '../scene/environment.js';
   import { fogColor, type FogSpec } from './fog.js';
   import type { OrbitControls as OrbitControlsType } from 'three/addons/controls/OrbitControls.js';
@@ -72,9 +73,67 @@
 
   let fogRef = $state<Fog>();
 
+  // WASD keys currently held; the camera glides while they are down.
+  const held = new Set<string>();
+  const look = new Vector3();
+  const forward = new Vector3();
+  const right = new Vector3();
+  const up = new Vector3();
+  const UP = new Vector3(0, 1, 0);
+
+  function onKeyDown(e: KeyboardEvent) {
+    const el = e.target as HTMLElement | null;
+    if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+    const key = e.key.toLowerCase();
+    if (!Object.hasOwn(FLY_KEYS, key)) return;
+    // Ctrl is itself a flying key, so only other modifiers block input.
+    if (key !== 'control' && (e.ctrlKey || e.metaKey || e.altKey)) return;
+    held.add(key);
+    // Space would otherwise scroll the page while flying.
+    if (key === ' ') e.preventDefault();
+  }
+
+  function onKeyUp(e: KeyboardEvent) {
+    held.delete(e.key.toLowerCase());
+  }
+
+  function fly(delta: number) {
+    if (!camera || !controls || held.size === 0) return;
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    for (const key of held) {
+      const dir = FLY_KEYS[key];
+      x += dir.x;
+      y += dir.y;
+      z += dir.z;
+    }
+    if (x === 0 && y === 0 && z === 0) return;
+
+    camera.getWorldDirection(look);
+    // Strafing stays level, so A/D never climb; W/S follow the full look vector.
+    forward.copy(look).setY(0).normalize();
+    right.crossVectors(forward, UP).normalize();
+    // Space and Shift move along the camera's own up, which tilts with the view.
+    up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+
+    // Speed scales with the distance to the target, so close and far views both feel usable.
+    const distance = Math.max(camera.position.distanceTo(controls.target), 20);
+    const step = look
+      .clone()
+      .multiplyScalar(z)
+      .addScaledVector(right, x)
+      .addScaledVector(up, y)
+      .normalize()
+      .multiplyScalar(distance * 1.2 * delta);
+    camera.position.add(step);
+    controls.target.add(step);
+  }
+
   // The fog distances are measured for the game camera, so they follow how far the view is from its target.
   useTask((delta) => {
     onTick?.(delta);
+    fly(delta);
     if (fog && fogRef && camera && controls) {
       const range = fogRange(fog, camera.position.distanceTo(controls.target));
       fogRef.near = range.near;
@@ -82,6 +141,8 @@
     }
   });
 </script>
+
+<svelte:window onkeydown={onKeyDown} onkeyup={onKeyUp} onblur={() => held.clear()} />
 
 <T.PerspectiveCamera makeDefault position={[150, 120, 350]} fov={40} near={1} far={200000} bind:ref={camera}>
   <OrbitControls enableDamping dampingFactor={0.12} bind:ref={controls} />
