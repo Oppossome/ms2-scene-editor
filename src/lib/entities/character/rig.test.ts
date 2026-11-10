@@ -195,7 +195,7 @@ describe('CharacterRig skin colours', () => {
     expect(calls()[0].slice(2)).toEqual([skin, skin]);
   });
 
-  it('tints the face\'s own mask with the eye colours and the skin regions with the skin', async () => {
+  it("tints the face's own mask with the eye colours and the skin regions with the skin", async () => {
     vi.mocked(applyTint).mockClear();
     const skin = colors(0xffccaa);
     const eye = colors(0x2244aa);

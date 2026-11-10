@@ -11,5 +11,5 @@ export function lastFrame(clips: ClipInfo[], name: string | undefined): number |
 export function stepFrame(frame: number, delta: number, last?: number): number {
   if (last === undefined) return Math.max(0, frame + delta);
   const length = last + 1;
-  return ((frame + delta) % length + length) % length;
+  return (((frame + delta) % length) + length) % length;
 }

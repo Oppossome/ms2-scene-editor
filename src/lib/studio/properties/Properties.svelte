@@ -24,10 +24,17 @@
     const id = selected instanceof ItemEntity ? selected.itemId : undefined;
     let active = true;
     itemRecord = null;
-    if (id) void getItem(id).then((record) => { if (active) itemRecord = record; }).catch((error) => {
-      if (active) studio.message = `Could not load item properties: ${error}`;
-    });
-    return () => { active = false; };
+    if (id)
+      void getItem(id)
+        .then((record) => {
+          if (active) itemRecord = record;
+        })
+        .catch((error) => {
+          if (active) studio.message = `Could not load item properties: ${error}`;
+        });
+    return () => {
+      active = false;
+    };
   });
   const clipSource = $derived.by<PreviewSource | null>(() => {
     const node = selected;
@@ -35,7 +42,11 @@
     if (node instanceof CharacterEntity) {
       const { items, ...look } = node.captureOutfit(store.itemsOf(node.id));
       return {
-        kind: 'character', gender: look.gender, skin: look.skin, eye: look.eye, expression: look.expression,
+        kind: 'character',
+        gender: look.gender,
+        skin: look.skin,
+        eye: look.eye,
+        expression: look.expression,
         items
       };
     }
@@ -43,19 +54,30 @@
   });
   const sections = $derived.by(() => {
     let controls: PropertyControl[];
-    if (bone) controls = [
-      { key: 'name', label: 'Name', value: bone.bone.replace(/_/g, ' '), section: 'Data', type: 'readonly' },
-      { key: 'class', label: 'Class', value: 'Bone', section: 'Data', type: 'readonly' },
-      { key: 'character', label: 'Character', value: store.node(bone.characterId)?.name ?? '', section: 'Data', type: 'readonly' }
-    ];
+    if (bone)
+      controls = [
+        { key: 'name', label: 'Name', value: bone.bone.replace(/_/g, ' '), section: 'Data', type: 'readonly' },
+        { key: 'class', label: 'Class', value: 'Bone', section: 'Data', type: 'readonly' },
+        {
+          key: 'character',
+          label: 'Character',
+          value: store.node(bone.characterId)?.name ?? '',
+          section: 'Data',
+          type: 'readonly'
+        }
+      ];
     else {
       if (!selected) return [];
       const parent = store.node(selected.parentId);
       controls = selected.controls({
-        node: selected, parent, clips: runtime.clipsOf(selected.id),
+        node: selected,
+        parent,
+        clips: runtime.clipsOf(selected.id),
         bones: parent?.type === 'character' ? runtime.boneNames(parent.id) : [],
-        defaultBone: runtime.defaultBoneOf(selected.id), skinned: runtime.isSkinned(selected.id),
-        palette: hasOwnColours(itemRecord) ? itemRecord?.palette ?? 0 : 0, channels: itemRecord?.channels ?? [true, true]
+        defaultBone: runtime.defaultBoneOf(selected.id),
+        skinned: runtime.isSkinned(selected.id),
+        palette: hasOwnColours(itemRecord) ? (itemRecord?.palette ?? 0) : 0,
+        channels: itemRecord?.channels ?? [true, true]
       });
     }
     const groups = new Map<string, PropertyControl[]>();
@@ -90,9 +112,15 @@
         {/each}
         {#if section.section === 'Transform' && selected?.type === 'group'}
           <div class="extra">
-            <button onclick={() => studio.centerGroup(selected.id)} disabled={!groupCenterPositions}
-              title="Center the group on its children's visible bounds without moving them">Center on children</button>
-            <p class="hint">Moves the group origin to the center of its children's visible bounds; their world positions stay unchanged.</p>
+            <button
+              onclick={() => studio.centerGroup(selected.id)}
+              disabled={!groupCenterPositions}
+              title="Center the group on its children's visible bounds without moving them">Center on children</button
+            >
+            <p class="hint">
+              Moves the group origin to the center of its children's visible bounds; their world positions stay
+              unchanged.
+            </p>
           </div>
         {/if}
       </details>
@@ -103,7 +131,11 @@
         <summary>Outfit</summary>
         <div class="extra">
           <div class="inline">
-            <input placeholder="Outfit name" bind:value={outfitName} onkeydown={(e) => e.key === 'Enter' && saveOutfit()} />
+            <input
+              placeholder="Outfit name"
+              bind:value={outfitName}
+              onkeydown={(e) => e.key === 'Enter' && saveOutfit()}
+            />
             <button onclick={saveOutfit} disabled={!outfitName.trim()}>Save outfit</button>
           </div>
           {#if saved}<p class="hint">{saved}</p>{/if}
@@ -116,17 +148,70 @@
 </div>
 
 <style>
-  .props { height: 100%; overflow-y: auto; font-size: 12.5px; }
-  .empty { color: var(--muted); padding: 10px; }
-  details { border-bottom: 1px solid var(--border); }
-  summary { cursor: pointer; padding: 5px 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; background: #1f2230; user-select: none; }
-  .row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 6px; padding: 2px 8px; min-height: 26px; }
-  .row.wide { align-items: start; }
-  .label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .value { min-width: 0; }
-  .extra { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px 8px; }
-  .inline { display: flex; gap: 4px; }
-  .inline input { flex: 1; min-width: 0; }
-  .hint { margin: 0; color: var(--muted); font-size: 11px; }
-  .error { color: #ff9a9a; padding: 8px; white-space: pre-wrap; }
+  .props {
+    height: 100%;
+    overflow-y: auto;
+    font-size: 12.5px;
+  }
+  .empty {
+    color: var(--muted);
+    padding: 10px;
+  }
+  details {
+    border-bottom: 1px solid var(--border);
+  }
+  summary {
+    cursor: pointer;
+    padding: 5px 8px;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #1f2230;
+    user-select: none;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    min-height: 26px;
+  }
+  .row.wide {
+    align-items: start;
+  }
+  .label {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .value {
+    min-width: 0;
+  }
+  .extra {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 8px 8px;
+  }
+  .inline {
+    display: flex;
+    gap: 4px;
+  }
+  .inline input {
+    flex: 1;
+    min-width: 0;
+  }
+  .hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .error {
+    color: #ff9a9a;
+    padding: 8px;
+    white-space: pre-wrap;
+  }
 </style>

@@ -13,11 +13,22 @@ import {
 } from './tree';
 
 // g > (hero > (hat, top), crate), loose
-const nodes = [n('g', 'group'), n('hero', 'character', 'g'), n('hat', 'item', 'hero'), n('top', 'item', 'hero'), n('crate', 'prop', 'g'), n('loose', 'prop')];
+const nodes = [
+  n('g', 'group'),
+  n('hero', 'character', 'g'),
+  n('hat', 'item', 'hero'),
+  n('top', 'item', 'hero'),
+  n('crate', 'prop', 'g'),
+  n('loose', 'prop')
+];
 
 describe('queries', () => {
   it('finds descendants, ancestors, root and path', () => {
-    expect(descendantsOf(nodes, 'g').map((x) => x.id).sort()).toEqual(['crate', 'hat', 'hero', 'top']);
+    expect(
+      descendantsOf(nodes, 'g')
+        .map((x) => x.id)
+        .sort()
+    ).toEqual(['crate', 'hat', 'hero', 'top']);
     expect(ancestorsOf(nodes, 'hat').map((x) => x.id)).toEqual(['hero', 'g']);
     expect(rootOf(nodes, 'hat')?.id).toBe('g');
     expect(rootOf(nodes, 'loose')?.id).toBe('loose');

@@ -13,7 +13,9 @@ describe('EntityProperty', () => {
     expect(() => property.value.values.push(3)).toThrow();
     property.assign(property.parse({ values: [4, 5] }));
     expect(property.value).toEqual({ values: [4, 5] });
-    expect(() => { property.value.values[0] = 0; }).toThrow();
+    expect(() => {
+      property.value.values[0] = 0;
+    }).toThrow();
   });
 
   it('validates without assigning and has no editor unless one is declared', () => {

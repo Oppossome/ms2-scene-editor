@@ -60,7 +60,10 @@ describe('applyFaceTextures', () => {
     const material = a.material as MeshStandardMaterial;
     expect(material).not.toBe(original);
     expect(material.map).toBe(tex);
-    expect(material.userData.ms2).toEqual({ shader0: expect.stringContaining('/00300002/02_idle_c.png'), gloss: 'g.png' });
+    expect(material.userData.ms2).toEqual({
+      shader0: expect.stringContaining('/00300002/02_idle_c.png'),
+      gloss: 'g.png'
+    });
     expect(original.map).toBe(before);
     expect(original.userData.ms2.shader0).toBe('old_c.png');
     // meshes that shared a material still share (one copy)

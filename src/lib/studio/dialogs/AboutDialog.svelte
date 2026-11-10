@@ -13,24 +13,32 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
 
 <div class="overlay" role="presentation" onpointerdown={close}>
-  <div class="dialog" role="dialog" aria-labelledby="about-title" tabindex="-1" onpointerdown={(e) => e.stopPropagation()}>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-labelledby="about-title"
+    tabindex="-1"
+    onpointerdown={(e) => e.stopPropagation()}
+  >
     <header>
       <strong id="about-title">About</strong>
       <button onclick={close} aria-label="Close">&times;</button>
     </header>
     <div class="body">
       <p>
-        MS2SceneEditor is a scene editor for the discontinued game MapleStory 2. It lets you dress characters, build scenes from the game's
-        maps, props and NPCs, pose and animate them, and export the result.
+        MS2SceneEditor is a scene editor for the discontinued game MapleStory 2. It lets you dress characters, build
+        scenes from the game's maps, props and NPCs, pose and animate them, and export the result.
       </p>
       <p class="ai">
-        <strong>Made with the heavy assistance of AI.</strong> Most of this project, including the asset extraction and conversion tools and this
-        editor, was written together with an AI coding assistant. It has not had the review that a hand-written project would. Expect rough edges and
-        mistakes, and check anything that matters.
+        <strong>Made with the heavy assistance of AI.</strong> Most of this project, including the asset extraction and conversion
+        tools and this editor, was written together with an AI coding assistant. It has not had the review that a hand-written
+        project would. Expect rough edges and mistakes, and check anything that matters.
       </p>
       <p>This is an unofficial fan project. It is not affiliated with or endorsed by Nexon.</p>
       <p>
-        Source code: <a href={REPO_URL} target="_blank" rel="noopener noreferrer">github.com/Oppossome/ms2-scene-editor</a>
+        Source code: <a href={REPO_URL} target="_blank" rel="noopener noreferrer"
+          >github.com/Oppossome/ms2-scene-editor</a
+        >
       </p>
     </div>
     <footer><button onclick={close}>Close</button></footer>

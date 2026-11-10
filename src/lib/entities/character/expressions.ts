@@ -1,11 +1,38 @@
 export const FACE_EXPRESSIONS = [
-  'angry', 'awe', 'disappoint', 'expectation', 'expect', 'gloomy', 'happy', 'hateyou',
-  'indifferent01', 'indifferent02', 'irritated', 'nospirit', 'panic', 'pathetic',
-  'serious', 'smile', 'sneaky2', 'sneaky', 'syncope01', 'syncope02', 'syncope03'
+  'angry',
+  'awe',
+  'disappoint',
+  'expectation',
+  'expect',
+  'gloomy',
+  'happy',
+  'hateyou',
+  'indifferent01',
+  'indifferent02',
+  'irritated',
+  'nospirit',
+  'panic',
+  'pathetic',
+  'serious',
+  'smile',
+  'sneaky2',
+  'sneaky',
+  'syncope01',
+  'syncope02',
+  'syncope03'
 ] as const;
 
-export type FaceExpression = 'idle' | 'blink' | 'talk' | 'attack' | 'focus' | 'pain' | (typeof FACE_EXPRESSIONS)[number];
-export const FACE_OVERRIDES: readonly FaceExpression[] = ['idle', 'blink', 'talk', 'attack', 'focus', 'pain', ...FACE_EXPRESSIONS];
+export type FaceExpression =
+  'idle' | 'blink' | 'talk' | 'attack' | 'focus' | 'pain' | (typeof FACE_EXPRESSIONS)[number];
+export const FACE_OVERRIDES: readonly FaceExpression[] = [
+  'idle',
+  'blink',
+  'talk',
+  'attack',
+  'focus',
+  'pain',
+  ...FACE_EXPRESSIONS
+];
 export const isFaceExpression = (value: unknown): value is FaceExpression =>
   typeof value === 'string' && FACE_OVERRIDES.some((expression) => expression === value);
 
@@ -34,7 +61,7 @@ export function faceFrameAt(sequence: FaceSequence, seconds: number): FaceFrame 
   const start = loopStart ?? frames.length;
   const intro = frames.slice(0, start).reduce((sum, frame) => sum + (frame.duration ?? Infinity), 0);
   const loop = frames.slice(start).reduce((sum, frame) => sum + (frame.duration ?? Infinity), 0);
-  if (time >= intro && loop > 0 && Number.isFinite(loop)) time = intro + (time - intro) % loop;
+  if (time >= intro && loop > 0 && Number.isFinite(loop)) time = intro + ((time - intro) % loop);
   for (const frame of frames) {
     if (frame.duration === null || time < frame.duration) return frame;
     time -= frame.duration;

@@ -17,7 +17,9 @@ nix shell nixpkgs#nodejs --command npm run index     # builds .data/*.json from 
 nix shell nixpkgs#nodejs --command npm run dev       # http://localhost:5173
 ```
 
-Other scripts: `npm run check` (svelte-check), `npm test` (Vitest), `npm run build` (adapter-node, then `node build`). Set `MS2_EXTRACTED` / `MS2_DATA` to move the asset or index folders.
+Other scripts: `npm run lint` / `npm run lint:fix` (ESLint), `npm run format:check` / `npm run format` (Prettier), `npm run check` (svelte-check), `npm test` (Vitest), `npm run build` (adapter-node, then `node build`). CI runs lint, formatting, types, tests and build. Set `MS2_EXTRACTED` / `MS2_DATA` to move the asset or index folders.
+
+ESLint uses flat configuration with JavaScript, TypeScript and Svelte recommended rules, including rune modules (`*.svelte.ts`); extraction JavaScript is CommonJS. Runtime caches and temporary collections deliberately remain non-reactive because explicit revisions drive updates. Prettier handles Svelte with `prettier-plugin-svelte`, single quotes, no trailing commas and a 120-column print width. Both tools exclude generated output, extracted assets and `vendor/`; Prettier also leaves the generated lockfile alone.
 
 ### Docker
 

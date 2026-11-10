@@ -55,7 +55,14 @@
 
 <label class="num" class:disabled>
   {#if label}
-    <span class="axis" role="presentation" onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>{label}</span>
+    <span
+      class="axis"
+      role="presentation"
+      onpointerdown={down}
+      onpointermove={move}
+      onpointerup={up}
+      onpointercancel={up}>{label}</span
+    >
   {/if}
   <input
     type="number"

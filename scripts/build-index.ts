@@ -5,15 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
-import type {
-  Gender,
-  IndexMeta,
-  ItemAsset,
-  ItemRecord,
-  MapRecord,
-  NpcRecord,
-  PaletteColor
-} from '../src/lib/types.ts';
+import type { Gender, IndexMeta, ItemAsset, ItemRecord, MapRecord, NpcRecord, PaletteColor } from '../src/lib/types.ts';
 
 const ROOT = path.resolve(process.env.MS2_EXTRACTED ?? 'extracted');
 const OUT = path.resolve(process.env.MS2_DATA ?? '.data');
@@ -36,7 +28,8 @@ function* walk(dir: string, ext: string): Generator<string> {
 }
 
 const readText = (file: string) => fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
-const num = (v: unknown, fallback = 0) => (v === undefined || v === '' || Number.isNaN(Number(v)) ? fallback : Number(v));
+const num = (v: unknown, fallback = 0) =>
+  v === undefined || v === '' || Number.isNaN(Number(v)) ? fallback : Number(v);
 const flag = (v: unknown) => v === '1' || v === 1 || v === 'true' || v === true;
 
 // ---- converted model lookup (lowercase relative path -> actual relative path)
@@ -59,7 +52,8 @@ function readNames(file: string): Map<string, { name: string; cls: string }> {
   const full = path.join(ROOT, 'Xml/string/en', file);
   if (!fs.existsSync(full)) return out;
   const doc = parser.parse(readText(full));
-  for (const k of doc?.ms2?.key ?? []) out.set(String(k.id), { name: String(k.name ?? ''), cls: String(k.class ?? '') });
+  for (const k of doc?.ms2?.key ?? [])
+    out.set(String(k.id), { name: String(k.name ?? ''), cls: String(k.class ?? '') });
   return out;
 }
 
@@ -91,6 +85,12 @@ function itemIcon(property: Record<string, string> | undefined, id: string): str
   return `Resource/Image/item/icon/${id}.png`;
 }
 
+interface ItemEnvironment {
+  property?: Record<string, string>;
+  customize?: Record<string, string>;
+  slots?: { slot?: { name?: string; asset?: Record<string, string>[] }[] };
+}
+
 function buildItems(): ItemRecord[] {
   const names = readNames('itemname.xml');
   const items: ItemRecord[] = [];
@@ -106,7 +106,7 @@ function buildItems(): ItemRecord[] {
       warn('item xml parse error');
       continue;
     }
-    const envs: Record<string, any>[] = doc?.ms2?.environment ?? [];
+    const envs: ItemEnvironment[] = doc?.ms2?.environment ?? [];
     const assets: ItemAsset[] = [];
     const seen = new Set<string>();
     let property: Record<string, string> | undefined;

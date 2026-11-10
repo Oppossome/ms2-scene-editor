@@ -3,7 +3,12 @@
   import { assetUrl } from '#lib/assets/urls.js';
   import type { Studio } from '../controller.svelte.js';
 
-  let { studio, value, onpick, onclose }: {
+  let {
+    studio,
+    value,
+    onpick,
+    onclose
+  }: {
     studio: Studio;
     value?: string;
     onpick?: (name: string) => void;
@@ -41,7 +46,13 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
 
 <div class="overlay" role="presentation" onpointerdown={close}>
-  <div class="dialog" role="dialog" aria-label="Choose a backdrop" tabindex="-1" onpointerdown={(e) => e.stopPropagation()}>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-label="Choose a backdrop"
+    tabindex="-1"
+    onpointerdown={(e) => e.stopPropagation()}
+  >
     <header>
       <strong>Backdrop</strong>
       <input type="search" placeholder="Filter..." bind:value={filter} />
@@ -53,7 +64,14 @@
     {:else}
       <div class="grid">
         {#each shown as name (name)}
-          <button class="cell" class:on={value !== undefined ? value === `Resource/Image/bg/${name}.png` : studio.look.background === 'image' && studio.look.image === name} title={name} onclick={() => pick(name)}>
+          <button
+            class="cell"
+            class:on={value !== undefined
+              ? value === `Resource/Image/bg/${name}.png`
+              : studio.look.background === 'image' && studio.look.image === name}
+            title={name}
+            onclick={() => pick(name)}
+          >
             <img src={assetUrl(`converted/bg-thumbs/${name}.jpg`)} alt={name} loading="lazy" />
             <span>{name.replace(/^bg_/i, '')}</span>
           </button>

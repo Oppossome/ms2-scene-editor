@@ -16,7 +16,14 @@
     | { type: 'skeleton'; key: string; depth: number; character: Entity; open: boolean }
     | { type: 'bone'; key: string; depth: number; characterId: string; bone: BoneInfo; open: boolean };
 
-  const BADGES: Record<Entity['type'], string> = { group: 'G', prop: 'P', npc: 'N', character: 'C', item: 'I', lighting: 'L' };
+  const BADGES: Record<Entity['type'], string> = {
+    group: 'G',
+    prop: 'P',
+    npc: 'N',
+    character: 'C',
+    item: 'I',
+    lighting: 'L'
+  };
 
   let filter = $state('');
   let list = $state<HTMLDivElement>();
@@ -78,7 +85,14 @@
     return out;
   });
   const virtual = $derived(rows.length > 200);
-  const start = $derived(virtual ? Math.max(0, Math.min(Math.floor(scrollTop / ROW_HEIGHT) - 10, rows.length - Math.ceil(listHeight / ROW_HEIGHT) - 20)) : 0);
+  const start = $derived(
+    virtual
+      ? Math.max(
+          0,
+          Math.min(Math.floor(scrollTop / ROW_HEIGHT) - 10, rows.length - Math.ceil(listHeight / ROW_HEIGHT) - 20)
+        )
+      : 0
+  );
   const end = $derived(virtual ? Math.min(rows.length, start + Math.ceil(listHeight / ROW_HEIGHT) + 20) : rows.length);
   const shown = $derived(rows.slice(start, end));
 
@@ -155,10 +169,15 @@
     return 'into';
   }
 
-  function dropTarget(row: Row, zone: Zone): { parentId: string | null; beforeId: string | null; bone?: string } | null {
+  function dropTarget(
+    row: Row,
+    zone: Zone
+  ): { parentId: string | null; beforeId: string | null; bone?: string } | null {
     if (!dragId) return null;
     if (row.type === 'bone') {
-      return canParent(store.nodes, dragId, row.characterId) ? { parentId: row.characterId, beforeId: null, bone: row.bone.name } : null;
+      return canParent(store.nodes, dragId, row.characterId)
+        ? { parentId: row.characterId, beforeId: null, bone: row.bone.name }
+        : null;
     }
     if (row.type === 'skeleton') return null;
     const node = row.node;
@@ -208,7 +227,15 @@
     <input type="search" placeholder="Filter..." bind:value={filter} />
     <button title="Collapse all" onclick={() => (store.expanded = {})}>-</button>
   </div>
-  <div class="list" bind:this={list} bind:clientHeight={listHeight} onscroll={(event) => { scrollTop = event.currentTarget.scrollTop; }} role="tree">
+  <div
+    class="list"
+    bind:this={list}
+    bind:clientHeight={listHeight}
+    onscroll={(event) => {
+      scrollTop = event.currentTarget.scrollTop;
+    }}
+    role="tree"
+  >
     {#if start}<div class="spacer" style:height={`${start * ROW_HEIGHT}px`} aria-hidden="true"></div>{/if}
     {#each shown as row (row.key)}
       {@const node = row.type === 'node' ? row.node : null}
@@ -309,9 +336,15 @@
         {/if}
       </div>
     {:else}
-      <p class="empty">{filter ? 'No matches.' : 'The scene is empty. Add things from the Toolbox, or right-click here.'}</p>
+      <p class="empty">
+        {filter ? 'No matches.' : 'The scene is empty. Add things from the Toolbox, or right-click here.'}
+      </p>
     {/each}
-    {#if end < rows.length}<div class="spacer" style:height={`${(rows.length - end) * ROW_HEIGHT}px`} aria-hidden="true"></div>{/if}
+    {#if end < rows.length}<div
+        class="spacer"
+        style:height={`${(rows.length - end) * ROW_HEIGHT}px`}
+        aria-hidden="true"
+      ></div>{/if}
     <div
       class="rest"
       role="presentation"

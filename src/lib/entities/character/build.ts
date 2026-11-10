@@ -29,7 +29,11 @@ export const eyeTint = (index: number) => paletteTint(EYE_PALETTE, index);
  * Tint of an item for a chosen palette row (its default when none is given), with optional per-channel picks;
  * undefined when the item is not customisable.
  */
-export async function itemTint(item: ItemRecord, index?: number, picks?: ChannelIndexes | null): Promise<TintColors | undefined> {
+export async function itemTint(
+  item: ItemRecord,
+  index?: number,
+  picks?: ChannelIndexes | null
+): Promise<TintColors | undefined> {
   if (!item.palette) return undefined;
   const colors = await getPalette(item.palette);
   return tintFromPalette(colors, index ?? item.defaultColor, picks);

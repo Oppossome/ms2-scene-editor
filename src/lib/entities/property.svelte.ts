@@ -24,9 +24,31 @@ interface ControlBase {
 }
 /** An editor row. `edit` returns the property values the change stands for; the scene validates and applies them. */
 export type PropertyControl =
-  | (ControlBase & { type: 'string' | 'enum' | 'clip' | 'backdrop'; value: string; options?: { value: string; label: string }[]; clips?: ClipInfo[]; edit: (value: string) => EntityInput })
-  | (ControlBase & { type: 'number' | 'palette'; value: number; step?: number; min?: number; max?: number; palette?: number; channel?: PickChannel; edit: (value: number) => EntityInput })
-  | (ControlBase & { type: 'vec3'; value: Vec3; step?: number; min?: number; max?: number; edit: (value: Vec3) => EntityInput })
+  | (ControlBase & {
+      type: 'string' | 'enum' | 'clip' | 'backdrop';
+      value: string;
+      options?: { value: string; label: string }[];
+      clips?: ClipInfo[];
+      edit: (value: string) => EntityInput;
+    })
+  | (ControlBase & {
+      type: 'number' | 'palette';
+      value: number;
+      step?: number;
+      min?: number;
+      max?: number;
+      palette?: number;
+      channel?: PickChannel;
+      edit: (value: number) => EntityInput;
+    })
+  | (ControlBase & {
+      type: 'vec3';
+      value: Vec3;
+      step?: number;
+      min?: number;
+      max?: number;
+      edit: (value: Vec3) => EntityInput;
+    })
   | (ControlBase & { type: 'bool'; value: boolean; edit: (value: boolean) => EntityInput })
   | (ControlBase & { type: 'readonly'; value: string })
   | (ControlBase & { type: 'transport'; frame?: number; max?: number })

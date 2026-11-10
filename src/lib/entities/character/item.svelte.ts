@@ -13,23 +13,60 @@ import { numericId, indexSchema } from '../validation.js';
 /** A worn item: its meshes belong to the parent character's rig, which this entity only configures. */
 export class ItemEntity extends BaseEntity {
   readonly type = 'item';
-  readonly sourceProperty = this.define('itemId', new EntityProperty(numericId, '0', (value) => ({
-    key: 'itemId', label: 'Item id', section: 'Source', type: 'readonly', value
-  }), true));
-  readonly slotsProperty = this.define('slots', new EntityProperty(
-    z.array(z.unknown()).transform((list) => list.filter((slot): slot is string => typeof slot === 'string' && !!slot)),
-    [] as string[],
-    (value) => ({ key: 'slots', label: 'Slots', section: 'Source', type: 'readonly', value: value.join(', ') })
-  ));
-  readonly colorProperty = this.define('color', new EntityProperty(indexSchema.optional(), undefined, (value, ctx) => ctx.palette ? {
-    key: 'color', label: editableChannels(ctx.channels).length > 1 ? 'Colour set' : 'Colour',
-    section: 'Appearance', type: 'palette', value: value ?? -1, palette: ctx.palette, edit: (color) => this.chooseColor(color)
-  } : null));
+  readonly sourceProperty = this.define(
+    'itemId',
+    new EntityProperty(
+      numericId,
+      '0',
+      (value) => ({
+        key: 'itemId',
+        label: 'Item id',
+        section: 'Source',
+        type: 'readonly',
+        value
+      }),
+      true
+    )
+  );
+  readonly slotsProperty = this.define(
+    'slots',
+    new EntityProperty(
+      z
+        .array(z.unknown())
+        .transform((list) => list.filter((slot): slot is string => typeof slot === 'string' && !!slot)),
+      [] as string[],
+      (value) => ({ key: 'slots', label: 'Slots', section: 'Source', type: 'readonly', value: value.join(', ') })
+    )
+  );
+  readonly colorProperty = this.define(
+    'color',
+    new EntityProperty(indexSchema.optional(), undefined, (value, ctx) =>
+      ctx.palette
+        ? {
+            key: 'color',
+            label: editableChannels(ctx.channels).length > 1 ? 'Colour set' : 'Colour',
+            section: 'Appearance',
+            type: 'palette',
+            value: value ?? -1,
+            palette: ctx.palette,
+            edit: (color) => this.chooseColor(color)
+          }
+        : null
+    )
+  );
   readonly channelsProperty = this.define('channelColors', new EntityProperty(channelsSchema.optional(), undefined));
-  get itemId() { return this.sourceProperty.value; }
-  get slots() { return this.slotsProperty.value; }
-  get color() { return this.colorProperty.value; }
-  get channelColors() { return this.channelsProperty.value; }
+  get itemId() {
+    return this.sourceProperty.value;
+  }
+  get slots() {
+    return this.slotsProperty.value;
+  }
+  get color() {
+    return this.colorProperty.value;
+  }
+  get channelColors() {
+    return this.channelsProperty.value;
+  }
 
   private mountedBone = '';
   private mount: Group | null = null;
@@ -88,14 +125,26 @@ export class ItemEntity extends BaseEntity {
   controls(ctx: PropContext): PropertyControl[] {
     const rows = super.controls(ctx);
     if (!ctx.skinned) {
-      rows.push({ key: 'resetOffset', label: 'Offset', section: 'Attachment', type: 'action', value: 'Reset offset', edit: () => this.resetOffset() });
+      rows.push({
+        key: 'resetOffset',
+        label: 'Offset',
+        section: 'Attachment',
+        type: 'action',
+        value: 'Reset offset',
+        edit: () => this.resetOffset()
+      });
     }
     const channels = editableChannels(ctx.channels);
     if (ctx.palette && channels.length > 1) {
       for (const channel of channels) {
         rows.push({
-          key: `colorCh${channel}`, label: channel === 0 ? 'Main' : 'Detail', section: 'Appearance', type: 'palette',
-          value: this.channelColors?.[`ch${channel}`] ?? this.color ?? -1, palette: ctx.palette, channel,
+          key: `colorCh${channel}`,
+          label: channel === 0 ? 'Main' : 'Detail',
+          section: 'Appearance',
+          type: 'palette',
+          value: this.channelColors?.[`ch${channel}`] ?? this.color ?? -1,
+          palette: ctx.palette,
+          channel,
           edit: (value) => ({ channelColors: { ...this.channelColors, [`ch${channel}`]: value } })
         });
       }

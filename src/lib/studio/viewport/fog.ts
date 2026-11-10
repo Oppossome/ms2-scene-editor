@@ -8,7 +8,8 @@ export interface FogSpec {
 }
 
 /** The fog colour as a three.js colour (the values are sRGB, like the backdrop image it blends into). */
-export const fogColor = ([r, g, b]: [number, number, number]) => new Color().setRGB(r / 255, g / 255, b / 255, SRGBColorSpace);
+export const fogColor = ([r, g, b]: [number, number, number]) =>
+  new Color().setRGB(r / 255, g / 255, b / 255, SRGBColorSpace);
 
 /** In the game the camera sits about this far from what it looks at, and the fog distances are measured from it. */
 export const GAME_CAMERA_DISTANCE = 1100;

@@ -35,7 +35,12 @@ function readGlb(buffer: ArrayBuffer) {
   const jsonLength = v.getUint32(12, true);
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 20, jsonLength)));
   const binStart = 20 + jsonLength;
-  return { json, total: v.getUint32(8, true), length: buffer.byteLength, bin: [...new Uint8Array(buffer, binStart + 8, v.getUint32(binStart, true))] };
+  return {
+    json,
+    total: v.getUint32(8, true),
+    length: buffer.byteLength,
+    bin: [...new Uint8Array(buffer, binStart + 8, v.getUint32(binStart, true))]
+  };
 }
 
 describe('GLB json editing', () => {
@@ -51,7 +56,9 @@ describe('GLB json editing', () => {
   });
 
   it('drops skin skeleton roots only', () => {
-    const r = readGlb(dropSkeletonRoots(makeGlb({ skins: [{ joints: [1, 2], skeleton: 1 }, { joints: [3] }], nodes: [{}] })));
+    const r = readGlb(
+      dropSkeletonRoots(makeGlb({ skins: [{ joints: [1, 2], skeleton: 1 }, { joints: [3] }], nodes: [{}] }))
+    );
     expect(r.json.skins).toEqual([{ joints: [1, 2] }, { joints: [3] }]);
     expect(r.json.nodes).toEqual([{}]);
   });

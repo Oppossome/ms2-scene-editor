@@ -100,7 +100,9 @@ export class CharacterRig {
     if (!rig.skinTint) {
       const face = rig.bodyParts.get(FACE_SLOT);
       if (face instanceof Mesh) {
-        face.material = Array.isArray(face.material) ? face.material.map((material) => material.clone()) : face.material.clone();
+        face.material = Array.isArray(face.material)
+          ? face.material.map((material) => material.clone())
+          : face.material.clone();
       }
     }
     rig.refreshFace();
@@ -127,7 +129,8 @@ export class CharacterRig {
   setEyeColors(colors: TintColors) {
     this.eyeColors = colors;
     this.skinTint?.setColors(colors);
-    for (const eq of this.equipped.values()) if (eq.slots.includes(FACE_SLOT)) for (const tint of eq.tints) tint.setColors(colors);
+    for (const eq of this.equipped.values())
+      if (eq.slots.includes(FACE_SLOT)) for (const tint of eq.tints) tint.setColors(colors);
   }
 
   setSkinColors(colors: TintColors) {
@@ -214,7 +217,8 @@ export class CharacterRig {
         const model = await instantiate(glb);
         if (isFace) await applyFaceTextures(model.object, item.id);
         // Items without palette colours still get their skin regions tinted.
-        const tint = colors || this.skinColors ? await applyTint(model.object, glb, colors ?? null, this.skinColors) : null;
+        const tint =
+          colors || this.skinColors ? await applyTint(model.object, glb, colors ?? null, this.skinColors) : null;
         return { object: model.object, tint };
       })
     );
@@ -289,7 +293,8 @@ export class CharacterRig {
 
       for (const asset of group) {
         if (!asset.replace) continue;
-        for (const name of bodyMeshesForSlot(asset.slot, [...this.bodyParts.keys()])) this.hide(eq, this.bodyParts.get(name)!);
+        for (const name of bodyMeshesForSlot(asset.slot, [...this.bodyParts.keys()]))
+          this.hide(eq, this.bodyParts.get(name)!);
       }
 
       const skinned: SkinnedMesh[] = [];
@@ -408,7 +413,8 @@ export class CharacterRig {
     mount.add(itemRoot);
     eq.mounts.push({ mount, bone: targetNode, home: targetNode });
     eq.objects.push(mount);
-    if (!this.place(mount, targetNode, eq)) console.warn(`No attach node "${targetNode}" on the body for ${eq.item.name}`);
+    if (!this.place(mount, targetNode, eq))
+      console.warn(`No attach node "${targetNode}" on the body for ${eq.item.name}`);
   }
 
   /** Parent a mount to a bone. A hidden body part (the default hair) cannot be the parent or the item would vanish with it. */

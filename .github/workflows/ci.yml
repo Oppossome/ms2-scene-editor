@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   app:
-    name: Check, test and build
+    name: Lint, format, check, test and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,12 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
 
       - name: Type check
         run: npm run check

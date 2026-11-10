@@ -9,7 +9,9 @@ describe('GroupEntity', () => {
     expect(group).toBeInstanceOf(GroupEntity);
     expect(group.toJSON()).toMatchObject({ type: 'group', mapId: '1' });
     expect(controlRow(controlContext(group), 'mapId')).toMatchObject({
-      type: 'readonly', section: 'Source', value: '1'
+      type: 'readonly',
+      section: 'Source',
+      value: '1'
     });
   });
 });

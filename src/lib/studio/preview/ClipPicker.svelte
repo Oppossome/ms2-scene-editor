@@ -69,7 +69,9 @@
   });
 
   /** Clip names in display order, for keyboard navigation ('' is the "no animation" row). */
-  const visible = $derived(view.rows.flatMap((r) => (r.type === 'none' ? [''] : r.type === 'clip' ? [r.clip.name] : [])));
+  const visible = $derived(
+    view.rows.flatMap((r) => (r.type === 'none' ? [''] : r.type === 'clip' ? [r.clip.name] : []))
+  );
 
   const committedInfo = $derived(clips.find((c) => c.name === value));
 
@@ -206,9 +208,17 @@
   onresize={() => open && position()}
 />
 
-<button class="trigger" bind:this={button} onclick={() => (open ? closePicker() : void openPicker())} aria-haspopup="listbox" aria-expanded={open} title={value || 'No animation'}>
+<button
+  class="trigger"
+  bind:this={button}
+  onclick={() => (open ? closePicker() : void openPicker())}
+  aria-haspopup="listbox"
+  aria-expanded={open}
+  title={value || 'No animation'}
+>
   <span class="label">{value || '(no animation)'}</span>
-  {#if committedInfo && committedInfo.duration > 0}<span class="time">{formatDuration(committedInfo.duration)}</span>{/if}
+  {#if committedInfo && committedInfo.duration > 0}<span class="time">{formatDuration(committedInfo.duration)}</span
+    >{/if}
   <span class="chev" aria-hidden="true">▾</span>
 </button>
 
@@ -228,7 +238,9 @@
         <div class="canvas"><PreviewCanvas preview={own} empty="Loading..." /></div>
         <div class="controls">
           <button onclick={() => own?.togglePlay()} disabled={!own.clip}>{own.playing ? 'Pause' : 'Play'}</button>
-          <label class="loop"><input type="checkbox" checked={own.loop} onchange={(e) => own?.setLoop(e.currentTarget.checked)} /> loop</label>
+          <label class="loop"
+            ><input type="checkbox" checked={own.loop} onchange={(e) => own?.setLoop(e.currentTarget.checked)} /> loop</label
+          >
           <span class="now">{own.clip || 'no animation'}</span>
         </div>
       </div>
@@ -247,7 +259,15 @@
     <div class="list" bind:this={list} role="listbox">
       {#each view.rows as row (row.type === 'none' ? '#none' : row.type === 'group' ? `g:${row.group.id}` : `c:${row.clip.name}`)}
         {#if row.type === 'none'}
-          <button class="row" class:selected={previewed === ''} class:current={baseline === ''} onclick={() => onRow('')} tabindex="-1" role="option" aria-selected={previewed === ''}>
+          <button
+            class="row"
+            class:selected={previewed === ''}
+            class:current={baseline === ''}
+            onclick={() => onRow('')}
+            tabindex="-1"
+            role="option"
+            aria-selected={previewed === ''}
+          >
             <span class="name muted">(no animation)</span>
           </button>
         {:else if row.type === 'group'}
@@ -275,16 +295,23 @@
       {/each}
       {#if view.matched === 0}<div class="empty">No animation matches "{query}".</div>{/if}
       {#if view.shown < view.total}
-        <div class="empty">Showing the first {view.shown} of {view.total.toLocaleString()}. Refine the search to see more.</div>
+        <div class="empty">
+          Showing the first {view.shown} of {view.total.toLocaleString()}. Refine the search to see more.
+        </div>
       {/if}
     </div>
 
     <div class="footer">
       <span class="pick" title={previewed ?? ''}>
-        {#if previewed === null}Nothing selected{:else if previewed === baseline}Already in use{:else}{previewed || '(no animation)'}{/if}
+        {#if previewed === null}Nothing selected{:else if previewed === baseline}Already in use{:else}{previewed ||
+            '(no animation)'}{/if}
       </span>
       <button onclick={() => closePicker()}>Cancel</button>
-      <button class="primary" disabled={previewed === null || previewed === baseline} onclick={() => previewed !== null && commit(previewed)}>Apply</button>
+      <button
+        class="primary"
+        disabled={previewed === null || previewed === baseline}
+        onclick={() => previewed !== null && commit(previewed)}>Apply</button
+      >
     </div>
   </div>
 {/if}

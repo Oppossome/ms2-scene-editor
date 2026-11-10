@@ -5,7 +5,12 @@
   import ItemBrowser from '#lib/studio/toolbox/ItemBrowser.svelte';
   import { deleteNamed, loadSaved, type OutfitSnapshot } from '#lib/entities/character/outfits.js';
   import type { ChannelIndexes } from '#lib/entities/character/tint.js';
-  import { CHANNEL_LABELS, editableChannels, hasOwnColours, type PickChannel } from '#lib/entities/character/appearance.js';
+  import {
+    CHANNEL_LABELS,
+    editableChannels,
+    hasOwnColours,
+    type PickChannel
+  } from '#lib/entities/character/appearance.js';
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from '../controller.svelte.js';
   import PaletteRow from '../controls/PaletteRow.svelte';
@@ -99,7 +104,12 @@
     outfits = [
       base('base-1', 'Female (base)', 1),
       base('base-0', 'Male (base)', 0),
-      ...Object.entries(loadSaved(localStorage)).map(([name, snapshot]) => ({ id: `saved:${name}`, name, saved: true, snapshot }))
+      ...Object.entries(loadSaved(localStorage)).map(([name, snapshot]) => ({
+        id: `saved:${name}`,
+        name,
+        saved: true,
+        snapshot
+      }))
     ];
   }
 
@@ -122,7 +132,9 @@
   // The character the item is tried on: what it wears now, as a string so unrelated scene edits do not reload the preview.
   const baseKey = $derived(
     target
-      ? (({ skin, eye, expression, items }) => JSON.stringify({ skin, eye, expression, items }))(target.captureOutfit(store.itemsOf(target.id)))
+      ? (({ skin, eye, expression, items }) => JSON.stringify({ skin, eye, expression, items }))(
+          target.captureOutfit(store.itemsOf(target.id))
+        )
       : ''
   );
   const into = $derived(
@@ -163,7 +175,14 @@
         return { kind: 'map', id: (s as MapEntry).id };
       case 'characters': {
         const o = (s as OutfitEntry).snapshot;
-        return { kind: 'character', gender: o.gender, skin: o.skin, eye: o.eye, expression: o.expression, items: o.items };
+        return {
+          kind: 'character',
+          gender: o.gender,
+          skin: o.skin,
+          eye: o.eye,
+          expression: o.expression,
+          items: o.items
+        };
       }
       case 'items':
         return {
@@ -243,7 +262,7 @@
   </div>
 
   <div class="tabs">
-    {#each TABS as t}
+    {#each TABS as t (t.id)}
       <button class:active={tab === t.id} onclick={() => setTab(t.id)}>{t.label}</button>
     {/each}
   </div>
@@ -261,14 +280,23 @@
             void insert();
           }}
           thumb={tab === 'maps' ? undefined : (r: ModelEntry) => previewUrlForModel(r.glb)}
-          detail={(r: ModelEntry & { id?: string; level?: number; levels?: [number, number]; variants?: number; xblock?: string }) =>
-            tab === 'npcs' ? npcDetail(r) : tab === 'maps' ? `${r.id} - ${r.xblock ?? ''}` : (r.id ?? '')}
+          detail={(
+            r: ModelEntry & {
+              id?: string;
+              level?: number;
+              levels?: [number, number];
+              variants?: number;
+              xblock?: string;
+            }
+          ) => (tab === 'npcs' ? npcDetail(r) : tab === 'maps' ? `${r.id} - ${r.xblock ?? ''}` : (r.id ?? ''))}
         />
       {/key}
     {:else if tab === 'items'}
       {#if target}<p class="hint">Previewed on {target.name}, with what it wears now.</p>{/if}
       <div class="gender">
-        <button class:active={itemTargetGender === 1} disabled={!!target} onclick={() => (itemGender = 1)}>Female</button>
+        <button class:active={itemTargetGender === 1} disabled={!!target} onclick={() => (itemGender = 1)}
+          >Female</button
+        >
         <button class:active={itemTargetGender === 0} disabled={!!target} onclick={() => (itemGender = 0)}>Male</button>
       </div>
       <ItemBrowser
@@ -294,9 +322,13 @@
               }}
             >
               <span class="name">{outfit.name}</span>
-              <span class="detail">{outfit.snapshot.gender === 1 ? 'Female' : 'Male'}, {outfit.snapshot.items.length} items</span>
+              <span class="detail"
+                >{outfit.snapshot.gender === 1 ? 'Female' : 'Male'}, {outfit.snapshot.items.length} items</span
+              >
             </button>
-            {#if outfit.saved}<button class="del" title="Delete this saved outfit" onclick={() => removeOutfit(outfit)}>x</button>{/if}
+            {#if outfit.saved}<button class="del" title="Delete this saved outfit" onclick={() => removeOutfit(outfit)}
+                >x</button
+              >{/if}
           </li>
         {/each}
       </ul>
@@ -317,7 +349,7 @@
         <PaletteRow palette={item.palette} value={itemColor ?? 0} onpick={pickSet} />
       </div>
       {#if editable.length > 1}
-        {#each editable as channel}
+        {#each editable as channel (channel)}
           <div class="color-row">
             <span class="color-label">{CHANNEL_LABELS[channel]}</span>
             <PaletteRow

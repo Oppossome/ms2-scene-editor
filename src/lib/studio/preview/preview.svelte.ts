@@ -22,7 +22,15 @@ export interface PreviewItem {
 export type PreviewSource =
   | { kind: 'model'; glb: string; scale?: number; clip?: string }
   | { kind: 'map'; id: string }
-  | { kind: 'character'; gender: 0 | 1; skin?: number; eye?: number; expression?: FaceExpression; items: PreviewItem[]; clip?: string }
+  | {
+      kind: 'character';
+      gender: 0 | 1;
+      skin?: number;
+      eye?: number;
+      expression?: FaceExpression;
+      items: PreviewItem[];
+      clip?: string;
+    }
   | {
       kind: 'item';
       item: ItemRecord;
@@ -143,7 +151,11 @@ export class PreviewController {
   }
 
   private async showCharacter(s: Extract<PreviewSource, { kind: 'character' }>, gen: number) {
-    const rig = await CharacterRig.create(s.gender, await skinTint(s.skin ?? DEFAULT_SKIN), await eyeTint(s.eye ?? DEFAULT_EYE));
+    const rig = await CharacterRig.create(
+      s.gender,
+      await skinTint(s.skin ?? DEFAULT_SKIN),
+      await eyeTint(s.eye ?? DEFAULT_EYE)
+    );
     if (gen !== this.gen) return rig.dispose();
     this.attachRig(rig, s.gender);
     this.expression = s.expression;

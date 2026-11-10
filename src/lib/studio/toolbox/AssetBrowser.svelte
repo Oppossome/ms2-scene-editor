@@ -103,7 +103,9 @@
       {#if error}
         <li><button class="more" onclick={() => fetchPage(false)}>Retry</button></li>
       {:else}
-        <li class="sentinel" aria-hidden="true" use:nearEnd={{ onnearend: more, state: [records.length, loading] }}>{loading ? 'Loading...' : ''}</li>
+        <li class="sentinel" aria-hidden="true" use:nearEnd={{ onnearend: more, state: [records.length, loading] }}>
+          {loading ? 'Loading...' : ''}
+        </li>
       {/if}
     {/if}
   </ul>

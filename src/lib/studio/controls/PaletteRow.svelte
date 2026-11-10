@@ -27,8 +27,15 @@
 </script>
 
 <div class="swatches">
-  {#each colors as color, i}
-    <button class="swatch" class:on={value === i} style:background={css(color)} title={`Colour ${i}`} aria-label={`Colour ${i}`} onclick={() => onpick(i)}></button>
+  {#each colors as color, i (color.sn)}
+    <button
+      class="swatch"
+      class:on={value === i}
+      style:background={css(color)}
+      title={`Colour ${i}`}
+      aria-label={`Colour ${i}`}
+      onclick={() => onpick(i)}
+    ></button>
   {/each}
 </div>
 

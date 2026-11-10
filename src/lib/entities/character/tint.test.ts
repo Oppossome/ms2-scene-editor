@@ -49,7 +49,7 @@ describe('isSkinMask', () => {
     expect(isSkinMask('a/m%5Fbody_c.png')).toBe(true);
   });
 
-  it('does not match an item\'s own mask', () => {
+  it("does not match an item's own mask", () => {
     expect(isSkinMask('../../textures/item/11700001_c_studentsrunningshoes_c.png')).toBe(false);
     expect(isSkinMask('../00200026_f_shortbodyperm_c.png')).toBe(false);
     expect(isSkinMask('m_body_c.png.bak')).toBe(false);
@@ -89,7 +89,9 @@ describe('tintPixel', () => {
   });
 
   it('does not read the blue channel', () => {
-    expect(tintPixel(grey, [0.4, 0.2, 0, 1], red, green, blue)).toEqual(tintPixel(grey, [0.4, 0.2, 1, 1], red, green, blue));
+    expect(tintPixel(grey, [0.4, 0.2, 0, 1], red, green, blue)).toEqual(
+      tintPixel(grey, [0.4, 0.2, 1, 1], red, green, blue)
+    );
   });
 
   it('blends partial alpha between the base and the tint in gamma space', () => {
@@ -99,7 +101,11 @@ describe('tintPixel', () => {
 });
 
 const row = (sn: number, ch0: string, ch1: string, ch2: string): PaletteColor => ({ sn, ch0, ch1, ch2, palette: ch0 });
-const palette = [row(0, '0xffaa0000', '0xff00aa00', '0xff0000aa'), row(1, '0xffffffff', '0xff111111', '0xff222222'), row(2, '0xff010203', '0xff040506', '0xff070809')];
+const palette = [
+  row(0, '0xffaa0000', '0xff00aa00', '0xff0000aa'),
+  row(1, '0xffffffff', '0xff111111', '0xff222222'),
+  row(2, '0xff010203', '0xff040506', '0xff070809')
+];
 const hex = (c: Color) => c.getHexString();
 
 describe('tintFromPalette', () => {
@@ -108,7 +114,7 @@ describe('tintFromPalette', () => {
     expect([hex(c.c0), hex(c.c1), hex(c.c2)]).toEqual(['ffffff', '111111', '222222']);
   });
 
-  it('takes a picked channel from the picked row, using that row\'s colour for that channel', () => {
+  it("takes a picked channel from the picked row, using that row's colour for that channel", () => {
     const c = tintFromPalette(palette, 0, { ch0: 1, ch2: 2 })!;
     expect([hex(c.c0), hex(c.c1), hex(c.c2)]).toEqual(['ffffff', '00aa00', '070809']);
   });

@@ -43,14 +43,28 @@
     } catch {
       // A damaged layout entry just means the defaults.
     }
-    void studio.restoreLocal(localStorage).then(() => { ready = true; });
+    void studio.restoreLocal(localStorage).then(() => {
+      ready = true;
+    });
   });
 
   onDestroy(() => studio.dispose());
 
   $effect(() => {
     if (!ready) return;
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftOpen: studio.toolboxOpen, showGrid: studio.showGrid, look: studio.look, leftWidth, rightWidth, explorerHeight, previewHeight: studio.previewHeight, expanded: store.expanded }));
+    localStorage.setItem(
+      LAYOUT_KEY,
+      JSON.stringify({
+        leftOpen: studio.toolboxOpen,
+        showGrid: studio.showGrid,
+        look: studio.look,
+        leftWidth,
+        rightWidth,
+        explorerHeight,
+        previewHeight: studio.previewHeight,
+        expanded: store.expanded
+      })
+    );
   });
 
   // Autosave on every change once the stored scene has been loaded.
@@ -108,8 +122,7 @@
     else if (!mod && key === 'i') {
       e.preventDefault();
       studio.openToolbox();
-    }
-    else if (e.key === 'Escape') store.select(null);
+    } else if (e.key === 'Escape') store.select(null);
   }
 
   const status = $derived.by(() => {
@@ -135,21 +148,46 @@
 
     <section class="center">
       <div class="toolbar">
-        <button class:active={studio.toolboxOpen} onclick={() => (studio.toolboxOpen = !studio.toolboxOpen)} title="Show or hide the Toolbox (I opens it)">Toolbox</button>
+        <button
+          class:active={studio.toolboxOpen}
+          onclick={() => (studio.toolboxOpen = !studio.toolboxOpen)}
+          title="Show or hide the Toolbox (I opens it)">Toolbox</button
+        >
         <span class="sep"></span>
-        <button class:active={store.mode === 'translate'} onclick={() => (store.mode = 'translate')} title="Move (G)">Move</button>
-        <button class:active={store.mode === 'rotate'} onclick={() => (store.mode = 'rotate')} title="Rotate (R)">Rotate</button>
-        <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (T)">Scale</button>
+        <button class:active={store.mode === 'translate'} onclick={() => (store.mode = 'translate')} title="Move (G)"
+          >Move</button
+        >
+        <button class:active={store.mode === 'rotate'} onclick={() => (store.mode = 'rotate')} title="Rotate (R)"
+          >Rotate</button
+        >
+        <button class:active={store.mode === 'scale'} onclick={() => (store.mode = 'scale')} title="Scale (T)"
+          >Scale</button
+        >
         {#if store.mode === 'translate'}
           <span class="sep"></span>
-          <button class:active={store.space === 'local'} onclick={() => (store.space = 'local')} title="Move along the selected node's local axes">Local</button>
-          <button class:active={store.space === 'world'} onclick={() => (store.space = 'world')} title="Move along the world's axes">World</button>
+          <button
+            class:active={store.space === 'local'}
+            onclick={() => (store.space = 'local')}
+            title="Move along the selected node's local axes">Local</button
+          >
+          <button
+            class:active={store.space === 'world'}
+            onclick={() => (store.space = 'world')}
+            title="Move along the world's axes">World</button
+          >
         {/if}
         <label class="snap"><input type="checkbox" bind:checked={store.snap} /> snap</label>
       </div>
 
       <div class="viewport">
-        <Viewport viewApi={studio.view} grid={studio.showGrid} gridSize={4000} background={studio.environment.background} fog={studio.environment.fog} onTick={(d) => runtime.update(d)}>
+        <Viewport
+          viewApi={studio.view}
+          grid={studio.showGrid}
+          gridSize={4000}
+          background={studio.environment.background}
+          fog={studio.environment.fog}
+          onTick={(d) => runtime.update(d)}
+        >
           <StudioScene {studio} />
         </Viewport>
       </div>
@@ -196,7 +234,12 @@
 
 {#if studio.menu}
   {#key studio.menu}
-    <ContextMenu x={studio.menu.x} y={studio.menu.y} items={studio.menuItems(studio.menu.target)} onclose={() => studio.closeMenu()} />
+    <ContextMenu
+      x={studio.menu.x}
+      y={studio.menu.y}
+      items={studio.menuItems(studio.menu.target)}
+      onclose={() => studio.closeMenu()}
+    />
   {/key}
 {/if}
 

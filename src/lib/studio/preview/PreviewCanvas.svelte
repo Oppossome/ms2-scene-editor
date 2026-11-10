@@ -22,7 +22,9 @@
   {#if !preview.object && !preview.status}<div class="note">{empty}</div>{/if}
   {#if preview.status}<div class="note" class:error={preview.failed}>{preview.status}</div>{/if}
   {#if preview.progress && preview.progress.loaded < preview.progress.total}
-    <div class="bar"><div style:width={`${(preview.progress.loaded / Math.max(1, preview.progress.total)) * 100}%`}></div></div>
+    <div class="bar">
+      <div style:width={`${(preview.progress.loaded / Math.max(1, preview.progress.total)) * 100}%`}></div>
+    </div>
   {/if}
 </div>
 

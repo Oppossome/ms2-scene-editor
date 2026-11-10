@@ -1,4 +1,13 @@
-import { Mesh, RepeatWrapping, SRGBColorSpace, TextureLoader, type Material, type MeshStandardMaterial, type Object3D, type Texture } from 'three';
+import {
+  Mesh,
+  RepeatWrapping,
+  SRGBColorSpace,
+  TextureLoader,
+  type Material,
+  type MeshStandardMaterial,
+  type Object3D,
+  type Texture
+} from 'three';
 import { assetUrl } from '../../assets/urls.js';
 import { isSkinMask } from './tint.js';
 

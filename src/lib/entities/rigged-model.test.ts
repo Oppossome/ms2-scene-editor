@@ -8,7 +8,10 @@ describe('RiggedModel controls', () => {
     const npc = new NpcEntity();
     npc.set({ clip: 'long', freeze: 80 });
     const context = controlContext(npc, {
-      clips: [{ name: 'long', duration: 4 }, { name: 'short', duration: 1 }]
+      clips: [
+        { name: 'long', duration: 4 },
+        { name: 'short', duration: 1 }
+      ]
     });
     const clip = controlRow(context, 'clip');
     if (clip.type !== 'clip') throw new Error('Expected clip picker');

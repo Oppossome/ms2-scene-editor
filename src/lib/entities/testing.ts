@@ -5,8 +5,14 @@ import type { RenderContext } from './render-context.js';
 
 export function controlContext(node: Entity, overrides: Partial<PropContext> = {}): PropContext {
   return {
-    node, clips: [], bones: [], defaultBone: '', skinned: false,
-    palette: 0, channels: [true, true], ...overrides
+    node,
+    clips: [],
+    bones: [],
+    defaultBone: '',
+    skinned: false,
+    palette: 0,
+    channels: [true, true],
+    ...overrides
   };
 }
 
@@ -18,8 +24,16 @@ export function controlRow(context: PropContext, key: string): PropertyControl {
 
 export function renderContext(overrides: Partial<RenderContext> = {}): RenderContext {
   return {
-    tag: vi.fn(), changed: vi.fn(), reparent: vi.fn(), clips: vi.fn(), defaultClip: vi.fn(),
-    items: () => [], entity: () => undefined, batch: () => false, unbatch: vi.fn(), error: vi.fn(),
+    tag: vi.fn(),
+    changed: vi.fn(),
+    reparent: vi.fn(),
+    clips: vi.fn(),
+    defaultClip: vi.fn(),
+    items: () => [],
+    entity: () => undefined,
+    batch: () => false,
+    unbatch: vi.fn(),
+    error: vi.fn(),
     ...overrides
   };
 }

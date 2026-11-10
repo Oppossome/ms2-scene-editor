@@ -4,7 +4,7 @@ import { fogRange, GAME_CAMERA_DISTANCE } from './fog.js';
 const fog = { color: [1, 2, 3] as [number, number, number], near: 5276, far: 20000 };
 
 describe('fogRange', () => {
-  it('is the map\'s own range at the game camera distance', () => {
+  it("is the map's own range at the game camera distance", () => {
     expect(fogRange(fog, GAME_CAMERA_DISTANCE)).toEqual({ near: 5276, far: 20000 });
   });
 

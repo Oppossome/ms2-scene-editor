@@ -84,10 +84,12 @@ describe('scene transactions', () => {
     store.undo();
     expect(store.nodes).toHaveLength(1);
     expect(store.canUndo).toBe(false);
-    expect(() => store.transaction(() => {
-      store.update('a', { name: 'Temporary' });
-      throw new Error('Failure');
-    })).toThrow('Failure');
+    expect(() =>
+      store.transaction(() => {
+        store.update('a', { name: 'Temporary' });
+        throw new Error('Failure');
+      })
+    ).toThrow('Failure');
     expect(store.node('a')?.name).toBe('a');
     expect(store.canUndo).toBe(false);
   });
@@ -104,7 +106,9 @@ describe('scene transactions', () => {
     store.update(copy, { position: [100, 0, 0] });
     expect(store.node(group)?.position).toEqual([0, 0, 0]);
     expect(store.nodes.find((node) => node.parentId === copy)).toBeInstanceOf(LightingEntity);
-    expect(store.nodes.filter((node) => node.type === 'lighting')[1]).not.toBe(store.nodes.filter((node) => node.type === 'lighting')[0]);
+    expect(store.nodes.filter((node) => node.type === 'lighting')[1]).not.toBe(
+      store.nodes.filter((node) => node.type === 'lighting')[0]
+    );
   });
 
   it('tells the renderer what to render again', () => {

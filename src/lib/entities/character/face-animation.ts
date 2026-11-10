@@ -1,6 +1,21 @@
-import { DataTexture, Mesh, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, TextureLoader, type Object3D, type Texture } from 'three';
+import {
+  DataTexture,
+  Mesh,
+  MeshStandardMaterial,
+  RepeatWrapping,
+  SRGBColorSpace,
+  TextureLoader,
+  type Object3D,
+  type Texture
+} from 'three';
 import { assetUrl } from '../../assets/urls.js';
-import { faceFrameAt, type FaceAnimations, type FaceExpression, type FaceFrame, type FaceSequence } from './expressions.js';
+import {
+  faceFrameAt,
+  type FaceAnimations,
+  type FaceExpression,
+  type FaceFrame,
+  type FaceSequence
+} from './expressions.js';
 import { getTintInfo, isSkinMask, loadMask, setTintMask } from './tint.js';
 
 const loader = new TextureLoader();
@@ -30,7 +45,7 @@ function loadDefinitions(gender: 0 | 1, itemId?: string): Promise<FaceAnimations
   if (!promise) {
     promise = fetch(`/api/faces?${query}`).then(async (response) => {
       if (!response.ok) throw new Error(`Face animations: ${response.status}`);
-      return await response.json() as FaceAnimations;
+      return (await response.json()) as FaceAnimations;
     });
     definitions.set(query, promise);
     void promise.catch(() => definitions.delete(query));
@@ -65,17 +80,18 @@ export class FaceAnimator {
     this.loaded.clear();
     const seen = new Set<MeshStandardMaterial>();
     this.materials = [];
-    for (const root of roots) root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      const materials = Array.isArray(object.material) ? object.material : [object.material];
-      for (const material of materials) {
-        if (!(material instanceof MeshStandardMaterial) || !material.map || seen.has(material)) continue;
-        const maskUri = material.userData.ms2?.shader0 ?? '';
-        if (isSkinMask(maskUri)) continue;
-        seen.add(material);
-        this.materials.push({ material, base: material.map, mask: getTintInfo(material)?.mask });
-      }
-    });
+    for (const root of roots)
+      root.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (!(material instanceof MeshStandardMaterial) || !material.map || seen.has(material)) continue;
+          const maskUri = material.userData.ms2?.shader0 ?? '';
+          if (isSkinMask(maskUri)) continue;
+          seen.add(material);
+          this.materials.push({ material, base: material.map, mask: getTintInfo(material)?.mask });
+        }
+      });
   }
 
   update(clip: string, seconds: number, expression?: FaceExpression, itemId?: string) {
@@ -94,17 +110,29 @@ export class FaceAnimator {
     this.apply();
   }
 
-  private async load(clip: string, expression: FaceExpression | undefined, itemId: string | undefined, generation: number) {
+  private async load(
+    clip: string,
+    expression: FaceExpression | undefined,
+    itemId: string | undefined,
+    generation: number
+  ) {
     const data = await loadDefinitions(this.gender, itemId);
     const override = expression ? data.overrides[expression] : undefined;
     if (expression && !override) throw new Error(`Unsupported face expression: ${expression}`);
-    const sequence = override ? { frames: [override], loopStart: null } : data.sequences[clip.toLowerCase()] ?? data.sequences.default;
+    const sequence = override
+      ? { frames: [override], loopStart: null }
+      : (data.sequences[clip.toLowerCase()] ?? data.sequences.default);
     if (!sequence) return;
     const loaded = new Map<FaceFrame, { base: Texture; mask: Texture }>();
-    await Promise.all(sequence.frames.map(async (frame) => {
-      const [base, mask] = await Promise.all([loadBase(frame.base), frame.mask ? loadMask(assetUrl(frame.mask)) : noMask]);
-      loaded.set(frame, { base, mask });
-    }));
+    await Promise.all(
+      sequence.frames.map(async (frame) => {
+        const [base, mask] = await Promise.all([
+          loadBase(frame.base),
+          frame.mask ? loadMask(assetUrl(frame.mask)) : noMask
+        ]);
+        loaded.set(frame, { base, mask });
+      })
+    );
     if (generation !== this.generation) return;
     this.loaded = loaded;
     this.sequence = sequence;

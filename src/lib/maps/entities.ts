@@ -20,7 +20,9 @@ const mapSchema = z
     unresolved: finite.int().nonnegative(),
     environment: environmentSchema.optional()
   })
-  .refine((data) => data.items.every((item) => Number.isInteger(item[0]) && !!data.models[item[0]]), { message: 'Invalid map model index' });
+  .refine((data) => data.items.every((item) => Number.isInteger(item[0]) && !!data.models[item[0]]), {
+    message: 'Invalid map model index'
+  });
 
 /** Position, Euler XYZ rotation (radians) and scale of a matrix, in the form scene entities store. */
 export function decomposeForScene(matrix: Matrix4): { position: Vec3; rotation: Vec3; scale: Vec3 } {
@@ -52,7 +54,10 @@ export function composeMap(group: GroupEntity, data: MapData, allocate = newId):
     return restoreEntity({
       type: 'prop',
       id: allocate(),
-      name: glb.split('/').pop()!.replace(/\.glb$/i, ''),
+      name: glb
+        .split('/')
+        .pop()!
+        .replace(/\.glb$/i, ''),
       parentId: group.id,
       glb,
       instanced: true,

@@ -98,7 +98,12 @@ export function groupNpcs(npcs: NpcRecord[]): { entry: NpcGroup; ids: string[] }
 }
 
 /** Search the grouped NPC list by name or by the id of any NPC in a group. */
-export function searchNpcs(groups: { entry: NpcGroup; ids: string[] }[], q: string | null | undefined, offset = 0, limit = 60): Page<NpcGroup> {
+export function searchNpcs(
+  groups: { entry: NpcGroup; ids: string[] }[],
+  q: string | null | undefined,
+  offset = 0,
+  limit = 60
+): Page<NpcGroup> {
   const words = tokens(q);
   const matched = words.length
     ? groups.filter((g) => {

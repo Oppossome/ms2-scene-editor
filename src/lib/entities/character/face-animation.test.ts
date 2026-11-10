@@ -59,13 +59,21 @@ afterEach(() => {
 describe('FaceAnimator', () => {
   it('follows clip time, overrides expressions, restores idle, and leaves head skin alone', async () => {
     const data: FaceAnimations = {
-      sequences: { test: { frames: [
-        { base: 'idle.png', mask: 'idle_c.png', duration: 100 },
-        { base: 'blink.png', mask: 'blink_c.png', duration: 100 }
-      ], loopStart: null } },
+      sequences: {
+        test: {
+          frames: [
+            { base: 'idle.png', mask: 'idle_c.png', duration: 100 },
+            { base: 'blink.png', mask: 'blink_c.png', duration: 100 }
+          ],
+          loopStart: null
+        }
+      },
       overrides: { smile: { base: 'smile.png', mask: null, duration: null } }
     };
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => data })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => data }))
+    );
     const face = model();
     const skin = model(true);
     const root = new Group();
@@ -93,13 +101,28 @@ describe('FaceAnimator', () => {
 
   it('does not apply a late response to a replaced face', async () => {
     let resolve!: (value: Response) => void;
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((done) => { resolve = done; })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((done) => {
+            resolve = done;
+          })
+      )
+    );
     const face = model();
     const animator = new FaceAnimator(1);
     animator.setTargets([face.mesh]);
     animator.update('test', 0);
     animator.setTargets([]);
-    resolve(new Response(JSON.stringify({ sequences: { test: { frames: [{ base: 'late.png', mask: null, duration: null }], loopStart: null } }, overrides: {} })));
+    resolve(
+      new Response(
+        JSON.stringify({
+          sequences: { test: { frames: [{ base: 'late.png', mask: null, duration: null }], loopStart: null } },
+          overrides: {}
+        })
+      )
+    );
     await animator.ready();
     expect(face.material.map).toBe(face.original);
   });

@@ -11,10 +11,24 @@ const text = z.string();
 
 /** A model loaded from a converted GLB. */
 export abstract class ModelEntity extends RiggedModel {
-  readonly modelProperty = this.define('glb', new EntityProperty(text.min(1), '', (value) => ({
-    key: 'glb', label: 'Model', section: 'Source', type: 'readonly', value
-  }), true));
-  get glb() { return this.modelProperty.value; }
+  readonly modelProperty = this.define(
+    'glb',
+    new EntityProperty(
+      text.min(1),
+      '',
+      (value) => ({
+        key: 'glb',
+        label: 'Model',
+        section: 'Source',
+        type: 'readonly',
+        value
+      }),
+      true
+    )
+  );
+  get glb() {
+    return this.modelProperty.value;
+  }
   private source: string | undefined;
   private content: Object3D | null = null;
   private embedded: AnimationClip[] = [];

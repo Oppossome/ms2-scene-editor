@@ -55,7 +55,8 @@ export function parseScene(data: unknown, issues: string[] = []): SceneDocument 
       }
       const isMap = legacy && record.kind === 'map';
       if (isMap) {
-        if (typeof record.mapId !== 'string' || !/^\d+$/.test(record.mapId)) throw new Error('mapId: expected a map id');
+        if (typeof record.mapId !== 'string' || !/^\d+$/.test(record.mapId))
+          throw new Error('mapId: expected a map id');
         record = { ...record, kind: 'group' };
       }
       if (legacy && version === 1 && record.kind === 'lighting') throw new Error('Lighting needs scene version 2');

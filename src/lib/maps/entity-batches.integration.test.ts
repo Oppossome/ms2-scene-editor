@@ -1,4 +1,14 @@
-import { BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, OrthographicCamera, SkinnedMesh, Vector2 } from 'three';
+import {
+  BoxGeometry,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  OrthographicCamera,
+  SkinnedMesh,
+  Vector2
+} from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState } from '../scene/store.svelte.js';
@@ -26,7 +36,11 @@ beforeEach(() => {
   store = new SceneState();
   store.hooks.localFor = (id, parentId, bone) => runtime.localFor(id, parentId, bone);
 });
-afterEach(() => { runtime.dispose(); geometry.dispose(); material.dispose(); });
+afterEach(() => {
+  runtime.dispose();
+  geometry.dispose();
+  material.dispose();
+});
 
 const world = (id: string) => {
   const object = runtime.objectOf(id)!;
@@ -36,7 +50,9 @@ const world = (id: string) => {
 const meshes = () => runtime.root.children.filter((object): object is InstancedMesh => object instanceof InstancedMesh);
 async function insert(count = 2) {
   const map = entity('map', 'group', null, { mapId: '1' });
-  const props = Array.from({ length: count }, (_, i) => entity(`prop${i}`, 'prop', 'map', { glb: 'Map/a.glb', instanced: true, position: [i * 20, 0, 0] }));
+  const props = Array.from({ length: count }, (_, i) =>
+    entity(`prop${i}`, 'prop', 'map', { glb: 'Map/a.glb', instanced: true, position: [i * 20, 0, 0] })
+  );
   store.append([map, ...props]);
   const ids = [map.id, ...props.map((prop) => prop.id)];
   runtime.sync(store.nodes);
@@ -107,7 +123,11 @@ describe('editable instance batches', () => {
     const scene = new Group();
     scene.add(new Mesh(geometry, material));
     let resolve!: (value: { scene: Group; animations: [] }) => void;
-    mocks.loadModel.mockReturnValue(new Promise((done) => { resolve = done; }));
+    mocks.loadModel.mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      })
+    );
     const id = store.add({ type: 'prop', name: 'Pending', glb: 'Map/a.glb', instanced: true });
     runtime.sync(store.nodes);
     store.remove(id);

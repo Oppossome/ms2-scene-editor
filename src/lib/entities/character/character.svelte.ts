@@ -1,88 +1,83 @@
-import { z } from "zod";
-import { AnimationPlayer } from "../../assets/animation.js";
-import { fetchBodyClips } from "../../assets/clips.js";
-import { loadClips } from "../../assets/loader.js";
-import { bodyClipDir } from "../../assets/urls.js";
-import { eyeTint, getItem, itemTint, skinTint } from "./build.js";
-import { CharacterRig } from "./rig.js";
-import { FACE_OVERRIDES } from "./expressions.js";
-import {
-  DEFAULT_EYE,
-  DEFAULT_SKIN,
-  SKIN_PALETTE,
-  EYE_PALETTE,
-} from "./appearance.js";
-import { expressionSchema } from "./schemas.js";
-import type { OutfitSnapshot } from "./outfits.js";
-import type { ItemEntity } from "./item.svelte.js";
-import { RiggedModel } from "../rigged-model.svelte.js";
-import { EntityProperty } from "../property.svelte.js";
-import type { RenderContext } from "../render-context.js";
-import { indexSchema, omitUndefined } from "../validation.js";
+import { z } from 'zod';
+import { AnimationPlayer } from '../../assets/animation.js';
+import { fetchBodyClips } from '../../assets/clips.js';
+import { loadClips } from '../../assets/loader.js';
+import { bodyClipDir } from '../../assets/urls.js';
+import { eyeTint, getItem, itemTint, skinTint } from './build.js';
+import { CharacterRig } from './rig.js';
+import { FACE_OVERRIDES } from './expressions.js';
+import { DEFAULT_EYE, DEFAULT_SKIN, SKIN_PALETTE, EYE_PALETTE } from './appearance.js';
+import { expressionSchema } from './schemas.js';
+import type { OutfitSnapshot } from './outfits.js';
+import type { ItemEntity } from './item.svelte.js';
+import { RiggedModel } from '../rigged-model.svelte.js';
+import { EntityProperty } from '../property.svelte.js';
+import type { RenderContext } from '../render-context.js';
+import { indexSchema, omitUndefined } from '../validation.js';
 
 const title = (value: string) => value[0].toUpperCase() + value.slice(1);
 
 export class CharacterEntity extends RiggedModel {
-  readonly type = "character";
+  readonly type = 'character';
   readonly genderProperty = this.define(
-    "gender",
+    'gender',
     new EntityProperty(
       z.union([z.literal(0), z.literal(1)]),
       1,
       (value) => ({
-        key: "gender",
-        label: "Gender",
-        section: "Appearance",
-        type: "enum",
+        key: 'gender',
+        label: 'Gender',
+        section: 'Appearance',
+        type: 'enum',
         value: String(value),
         options: [
-          { value: "1", label: "Female" },
-          { value: "0", label: "Male" },
+          { value: '1', label: 'Female' },
+          { value: '0', label: 'Male' }
         ],
-        edit: (gender) => ({ gender: gender === "0" ? 0 : 1 }),
+        edit: (gender) => ({ gender: gender === '0' ? 0 : 1 })
       }),
-      true,
-    ),
+      true
+    )
   );
   readonly expressionProperty = this.define(
-    "expression",
+    'expression',
     new EntityProperty(expressionSchema.optional(), undefined, (value) => ({
-      key: "expression",
-      label: "Expression",
-      section: "Appearance",
-      type: "enum",
-      value: value ?? "",
+      key: 'expression',
+      label: 'Expression',
+      section: 'Appearance',
+      type: 'enum',
+      value: value ?? '',
       options: [
-        { value: "", label: "Automatic (animation)" },
-        ...FACE_OVERRIDES.map((name) => ({ value: name, label: title(name) })),
+        { value: '', label: 'Automatic (animation)' },
+        ...FACE_OVERRIDES.map((name) => ({ value: name, label: title(name) }))
       ],
-      edit: (name) => ({ expression: name || undefined }),
-    })),
+      edit: (name) => ({ expression: name || undefined })
+    }))
   );
   readonly skinProperty = this.define(
-    "skin",
+    'skin',
     new EntityProperty(indexSchema, DEFAULT_SKIN, (value) => ({
-      key: "skin",
-      label: "Skin tone",
-      section: "Appearance",
-      type: "palette",
+      key: 'skin',
+      label: 'Skin tone',
+      section: 'Appearance',
+      type: 'palette',
       value,
       palette: SKIN_PALETTE,
-      edit: (skin) => ({ skin }),
-    })),
+      edit: (skin) => ({ skin })
+    }))
   );
   readonly eyeProperty = this.define(
-    "eye",
+    'eye',
     new EntityProperty(indexSchema, DEFAULT_EYE, (value) => ({
-      key: "eye",
-      label: "Eye colour",
-      section: "Appearance",
-      type: "palette",
+      key: 'eye',
+      label: 'Eye colour',
+      section: 'Appearance',
+      type: 'palette',
       value,
       palette: EYE_PALETTE,
       channel: 0,
-      edit: (eye) => ({ eye }),
-    })),
+      edit: (eye) => ({ eye })
+    }))
   );
   get gender() {
     return this.genderProperty.value;
@@ -102,7 +97,7 @@ export class CharacterEntity extends RiggedModel {
   private skinApplied: number | undefined;
   private eyeApplied: number | undefined;
   private appearanceGen = 0;
-  private itemSig = "";
+  private itemSig = '';
   private itemColors = new Map<string, string>();
   private reconciling = false;
   private dirty = false;
@@ -113,11 +108,7 @@ export class CharacterEntity extends RiggedModel {
       this.genderApplied = this.gender;
       void this.loadRig();
     }
-    if (
-      this.rig &&
-      (this.skinApplied !== this.skin || this.eyeApplied !== this.eye)
-    )
-      void this.applyAppearance();
+    if (this.rig && (this.skinApplied !== this.skin || this.eyeApplied !== this.eye)) void this.applyAppearance();
     this.updateFace();
     this.syncItems();
   }
@@ -128,14 +119,10 @@ export class CharacterEntity extends RiggedModel {
     this.rig?.dispose();
     this.rig = null;
     for (const item of this.context?.items(this.id) ?? []) item.resetMount();
-    this.itemSig = "";
+    this.itemSig = '';
     this.itemColors.clear();
     try {
-      const rig = await CharacterRig.create(
-        this.gender,
-        await skinTint(this.skin),
-        await eyeTint(this.eye),
-      );
+      const rig = await CharacterRig.create(this.gender, await skinTint(this.skin), await eyeTint(this.eye));
       if (gen !== this.gen || this.disposed) return rig.dispose();
       this.rig = rig;
       this.skinApplied = this.skin;
@@ -158,12 +145,8 @@ export class CharacterEntity extends RiggedModel {
     this.skinApplied = this.skin;
     this.eyeApplied = this.eye;
     try {
-      const [skin, eye] = await Promise.all([
-        skinTint(this.skin),
-        eyeTint(this.eye),
-      ]);
-      if (gen !== this.appearanceGen || rig !== this.rig || this.disposed)
-        return;
+      const [skin, eye] = await Promise.all([skinTint(this.skin), eyeTint(this.eye)]);
+      if (gen !== this.appearanceGen || rig !== this.rig || this.disposed) return;
       if (skin) rig?.setSkinColors(skin);
       if (eye) rig?.setEyeColors(eye);
     } catch (error) {
@@ -176,11 +159,7 @@ export class CharacterEntity extends RiggedModel {
   }
 
   private updateFace() {
-    this.rig?.updateFace(
-      this.player?.clip?.name ?? "",
-      this.player?.time ?? 0,
-      this.expression,
-    );
+    this.rig?.updateFace(this.player?.clip?.name ?? '', this.player?.time ?? 0, this.expression);
   }
 
   tick(delta: number) {
@@ -194,11 +173,8 @@ export class CharacterEntity extends RiggedModel {
     const items = this.context?.items(this.id) ?? [];
     for (const item of items) item.renderOn(this);
     const signature = items
-      .map(
-        (item) =>
-          `${item.id}:${item.itemId}:${item.color}:${JSON.stringify(item.channelColors)}`,
-      )
-      .join("|");
+      .map((item) => `${item.id}:${item.itemId}:${item.color}:${JSON.stringify(item.channelColors)}`)
+      .join('|');
     if (signature === this.itemSig) return;
     this.itemSig = signature;
     if (this.reconciling) {
@@ -229,8 +205,7 @@ export class CharacterEntity extends RiggedModel {
     if (!rig) return;
     const desired = this.context?.items(this.id) ?? [];
     const wanted = new Set(desired.map((item) => item.itemId));
-    for (const id of [...rig.equipped.keys()])
-      if (!wanted.has(id)) rig.unequip(id);
+    for (const id of [...rig.equipped.keys()]) if (!wanted.has(id)) rig.unequip(id);
     for (const item of desired) {
       if (gen !== this.gen || this.disposed) return;
       const id = item.itemId;
@@ -252,8 +227,7 @@ export class CharacterEntity extends RiggedModel {
     if (gen !== this.gen || this.disposed) return;
     for (const item of this.context?.items(this.id) ?? []) {
       item.resetMount();
-      for (const object of rig.objectsOf(item.itemId))
-        this.context?.tag(object, item.id);
+      for (const object of rig.objectsOf(item.itemId)) this.context?.tag(object, item.id);
       item.renderOn(this);
     }
     this.updateFace();
@@ -273,9 +247,9 @@ export class CharacterEntity extends RiggedModel {
         omitUndefined({
           id: item.itemId,
           color: item.color,
-          channels: item.channelColors,
-        }),
-      ),
+          channels: item.channelColors
+        })
+      )
     };
   }
 

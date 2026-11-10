@@ -9,7 +9,19 @@ const item = (over: Partial<ItemRecord>): ItemRecord => ({
   cls: 'coat',
   icon: '',
   slots: ['CL'],
-  assets: [{ slot: 'CL', glb: 'a.glb', gender: 2, selfnode: '', targetnode: '', attachnode: '', replace: true, earfold: false, weapon: false }],
+  assets: [
+    {
+      slot: 'CL',
+      glb: 'a.glb',
+      gender: 2,
+      selfnode: '',
+      targetnode: '',
+      attachnode: '',
+      replace: true,
+      earfold: false,
+      weapon: false
+    }
+  ],
   palette: 0,
   defaultColor: 0,
   channels: [false, false],
@@ -26,7 +38,19 @@ const items = [
     id: '2',
     name: 'Female Dress',
     cls: 'dress',
-    assets: [{ slot: 'CL', glb: 'f.glb', gender: 1, selfnode: '', targetnode: '', attachnode: '', replace: true, earfold: false, weapon: false }]
+    assets: [
+      {
+        slot: 'CL',
+        glb: 'f.glb',
+        gender: 1,
+        selfnode: '',
+        targetnode: '',
+        attachnode: '',
+        replace: true,
+        earfold: false,
+        weapon: false
+      }
+    ]
   })
 ];
 
@@ -67,7 +91,13 @@ describe('searchByName', () => {
   });
 });
 
-const npc = (id: string, name: string, glb: string, level: number, scale = 1): NpcRecord => ({ id, name, glb, level, scale });
+const npc = (id: string, name: string, glb: string, level: number, scale = 1): NpcRecord => ({
+  id,
+  name,
+  glb,
+  level,
+  scale
+});
 
 describe('groupNpcs', () => {
   const npcs = [
@@ -87,7 +117,11 @@ describe('groupNpcs', () => {
   });
 
   it('keeps the same name apart when the models differ', () => {
-    expect(groupNpcs(npcs).filter((g) => g.entry.name === 'Cathy').map((g) => g.entry.glb)).toEqual(['trader2.glb', 'trader3.glb']);
+    expect(
+      groupNpcs(npcs)
+        .filter((g) => g.entry.name === 'Cathy')
+        .map((g) => g.entry.glb)
+    ).toEqual(['trader2.glb', 'trader3.glb']);
   });
 
   it('picks the entry the same way whatever the order, and lists every id', () => {

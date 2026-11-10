@@ -1,4 +1,11 @@
-import { CanvasTexture, SRGBColorSpace, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
+import {
+  CanvasTexture,
+  SRGBColorSpace,
+  type Material,
+  type Mesh,
+  type MeshStandardMaterial,
+  type Object3D
+} from 'three';
 import { getTintInfo, tintPixel, type MaskPixel } from '../entities/character/tint.js';
 
 const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
@@ -50,7 +57,12 @@ export function bakeTintedMaterial(material: MeshStandardMaterial): MeshStandard
       toLinear(basePixels[i + 1] / 255) * factor.g,
       toLinear(basePixels[i + 2] / 255) * factor.b
     ];
-    const m: MaskPixel = [maskPixels[i] / 255, maskPixels[i + 1] / 255, maskPixels[i + 2] / 255, maskPixels[i + 3] / 255];
+    const m: MaskPixel = [
+      maskPixels[i] / 255,
+      maskPixels[i + 1] / 255,
+      maskPixels[i + 2] / 255,
+      maskPixels[i + 3] / 255
+    ];
     const result = tintPixel(linear, m, t0, t1, t2);
     out.data[i] = toSrgb(result[0]) * 255;
     out.data[i + 1] = toSrgb(result[1]) * 255;

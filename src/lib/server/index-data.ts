@@ -43,6 +43,7 @@ export const getMeta = () => load<IndexMeta>('meta.json');
 let itemsById: { source: ItemRecord[]; map: Map<string, ItemRecord> } | null = null;
 export function getItemById(id: string): ItemRecord | undefined {
   const items = getItems();
-  if (!itemsById || itemsById.source !== items) itemsById = { source: items, map: new Map(items.map((i) => [i.id, i])) };
+  if (!itemsById || itemsById.source !== items)
+    itemsById = { source: items, map: new Map(items.map((i) => [i.id, i])) };
   return itemsById.map.get(id);
 }

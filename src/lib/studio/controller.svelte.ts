@@ -23,7 +23,8 @@ import { pathOf } from '../scene/tree.js';
 const STEP_BURST_MS = 800;
 
 /** What a context menu or the Add Child panel is about. */
-export type MenuTarget = { type: 'node'; id: string } | { type: 'bone'; characterId: string; bone: string } | { type: 'empty' };
+export type MenuTarget =
+  { type: 'node'; id: string } | { type: 'bone'; characterId: string; bone: string } | { type: 'empty' };
 
 export interface MenuState {
   x: number;
@@ -107,7 +108,9 @@ export class Studio {
     this.store.hooks.localFor = (id, parentId, bone) => this.runtime.localFor(id, parentId, bone);
     this.store.hooks.cancelLoad = () => this.documentLoad?.abort();
     this.runtime.hooks.defaultClip = (id, clip) => this.store.update(id, { clip }, false);
-    this.runtime.hooks.error = (message) => { this.message = message; };
+    this.runtime.hooks.error = (message) => {
+      this.message = message;
+    };
   }
 
   // ----- Toolbox inserts ---------------------------------------------------------------------------------------
@@ -185,7 +188,13 @@ export class Studio {
     }
     const parent = this.insertParentId;
     const id = this.store.addCharacter(
-      { name: gender === 1 ? 'Female' : 'Male', gender, skin: DEFAULT_SKIN, parentId: parent, position: parent ? [0, 0, 0] : this.spawnPoint() },
+      {
+        name: gender === 1 ? 'Female' : 'Male',
+        gender,
+        skin: DEFAULT_SKIN,
+        parentId: parent,
+        position: parent ? [0, 0, 0] : this.spawnPoint()
+      },
       [{ itemId: item.id, name: item.name, slots: item.slots, color, channelColors }]
     );
     return this.inserted(id, parent);
@@ -220,7 +229,7 @@ export class Studio {
 
   async addMap(entry: { id: string; name: string }, parentId?: string, attachBone?: string): Promise<string> {
     this.documentLoad?.abort();
-    const request = this.documentLoad = new AbortController();
+    const request = (this.documentLoad = new AbortController());
     const revision = this.store.revision;
     this.busy = 'map';
     this.message = '';
@@ -231,8 +240,14 @@ export class Studio {
         return '';
       }
       const group = restoreEntity({
-        type: 'group', name: entry.name, parentId: parentId ?? null, attachBone, mapId: data.id,
-        position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1]
+        type: 'group',
+        name: entry.name,
+        parentId: parentId ?? null,
+        attachBone,
+        mapId: data.id,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1]
       });
       const id = group.id;
       this.store.append([group, ...composeMap(group as GroupEntity, data)]);
@@ -241,13 +256,21 @@ export class Studio {
       this.message = `Added ${data.items.length} props${data.unresolved ? `; ${data.unresolved} nonrenderable/unresolved records omitted` : ''}.`;
       return id;
     } catch (error) {
-      if (!request.signal.aborted) this.message = `Could not load map: ${error instanceof Error ? error.message : error}`;
+      if (!request.signal.aborted)
+        this.message = `Could not load map: ${error instanceof Error ? error.message : error}`;
       return '';
-    } finally { if (this.documentLoad === request) this.busy = ''; }
+    } finally {
+      if (this.documentLoad === request) this.busy = '';
+    }
   }
 
   addGroup(parentId?: string): string {
-    return this.store.add({ type: 'group', name: 'Group', parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() });
+    return this.store.add({
+      type: 'group',
+      name: 'Group',
+      parentId,
+      position: parentId ? [0, 0, 0] : this.spawnPoint()
+    });
   }
   addLighting(parentId?: string): string {
     return this.store.add({ type: 'lighting', name: 'Lighting', parentId, environment: {} });
@@ -259,7 +282,13 @@ export class Studio {
     records.forEach((record, i) => {
       if (record) {
         const entry = snapshot.items[i];
-        out.push({ itemId: record.id, name: record.name, slots: record.slots, color: entry.color, channelColors: entry.channels });
+        out.push({
+          itemId: record.id,
+          name: record.name,
+          slots: record.slots,
+          color: entry.color,
+          channelColors: entry.channels
+        });
       }
     });
     return out;
@@ -268,14 +297,28 @@ export class Studio {
   async addCharacter(name: string, snapshot: OutfitSnapshot, parentId?: string): Promise<string> {
     const items = await this.outfitItems(snapshot);
     return this.store.addCharacter(
-      { name, gender: snapshot.gender, skin: snapshot.skin, eye: snapshot.eye, expression: snapshot.expression, parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() },
+      {
+        name,
+        gender: snapshot.gender,
+        skin: snapshot.skin,
+        eye: snapshot.eye,
+        expression: snapshot.expression,
+        parentId,
+        position: parentId ? [0, 0, 0] : this.spawnPoint()
+      },
       items
     );
   }
 
   addBaseCharacter(gender: 0 | 1, parentId?: string): string {
     return this.store.addCharacter(
-      { name: gender === 1 ? 'Female' : 'Male', gender, skin: DEFAULT_SKIN, parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() },
+      {
+        name: gender === 1 ? 'Female' : 'Male',
+        gender,
+        skin: DEFAULT_SKIN,
+        parentId,
+        position: parentId ? [0, 0, 0] : this.spawnPoint()
+      },
       []
     );
   }
@@ -287,7 +330,12 @@ export class Studio {
     const items = await this.outfitItems(snapshot);
     const eye = snapshot.eye ?? DEFAULT_EYE;
     this.store.transaction(() => {
-      this.store.update(characterId, { gender: snapshot.gender, skin: snapshot.skin, eye, expression: snapshot.expression });
+      this.store.update(characterId, {
+        gender: snapshot.gender,
+        skin: snapshot.skin,
+        eye,
+        expression: snapshot.expression
+      });
       this.store.setOutfit(characterId, items);
     });
   }
@@ -348,7 +396,7 @@ export class Studio {
   private async loadDocument(text: string, initial = false): Promise<boolean> {
     if (initial) this.autosaveBlocked = true;
     this.documentLoad?.abort();
-    const request = this.documentLoad = new AbortController();
+    const request = (this.documentLoad = new AbortController());
     const issues: string[] = [];
     const parsed = parseSceneJson(text, issues);
     if (!parsed) {
@@ -370,9 +418,12 @@ export class Studio {
       return true;
     } catch (error) {
       if (initial) this.autosaveBlocked = true;
-      if (!request.signal.aborted) this.message = `Cannot load scene; original save preserved: ${error instanceof Error ? error.message : error}`;
+      if (!request.signal.aborted)
+        this.message = `Cannot load scene; original save preserved: ${error instanceof Error ? error.message : error}`;
       return false;
-    } finally { if (this.documentLoad === request) this.busy = ''; }
+    } finally {
+      if (this.documentLoad === request) this.busy = '';
+    }
   }
 
   async restoreLocal(storage: Pick<Storage, 'getItem'>): Promise<boolean> {
@@ -509,7 +560,11 @@ export class Studio {
       { label: 'Unparent', action: () => store.reparent(id, null), disabled: item || node.parentId === null },
       { label: node.visible ? 'Hide' : 'Show', action: () => this.toggleVisible(id), separator: true },
       { label: node.locked ? 'Unlock' : 'Lock', action: () => this.toggleLocked(id) },
-      { label: 'Export GLB', action: () => void this.exportGlb(id), disabled: item || (node instanceof GroupEntity && !!node.mapId) || node.type === 'lighting' },
+      {
+        label: 'Export GLB',
+        action: () => void this.exportGlb(id),
+        disabled: item || (node instanceof GroupEntity && !!node.mapId) || node.type === 'lighting'
+      },
       { label: 'Delete', action: () => store.remove(id), danger: true, separator: true }
     ];
   }

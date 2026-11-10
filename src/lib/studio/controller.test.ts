@@ -12,13 +12,25 @@ function setup(frameNow = 0) {
     clipsOf: () => [{ name: 'idle_a', duration: 2.1 }],
     currentFrame: () => frameNow
   };
-  const studio = { store, runtime, lastStep: { id: '', at: 0 }, setFrame: Studio.prototype.setFrame, inBurst: Studio.prototype.inBurst };
+  const studio = {
+    store,
+    runtime,
+    lastStep: { id: '', at: 0 },
+    setFrame: Studio.prototype.setFrame,
+    inBurst: Studio.prototype.inBurst
+  };
   const call = {
     setFrame: (frame: number, record?: boolean) => Studio.prototype.setFrame.call(studio, id, frame, record),
     stepFrame: (delta: number) => Studio.prototype.stepFrame.call(studio, id, delta),
     holdFrame: (frame: number) => Studio.prototype.holdFrame.call(studio, id, frame)
   };
-  return { store, id, call, freeze: () => (store.node(id) as CharacterEntity | undefined)?.freeze, undoDepth: () => depth(store) };
+  return {
+    store,
+    id,
+    call,
+    freeze: () => (store.node(id) as CharacterEntity | undefined)?.freeze,
+    undoDepth: () => depth(store)
+  };
 }
 
 /** How many undo steps the frame edits made (adding the character is one step of its own). */

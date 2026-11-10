@@ -3,13 +3,30 @@ import { Studio } from './controller.svelte.js';
 import { SCENE_KEY } from '../scene/document.js';
 
 const map = {
-  id: '1', name: 'Map', models: ['Map/a.glb'],
-  items: [[0, 10, 20, 30, 0, 0, 0, 1, 1, 1]], total: 1, unresolved: 0
+  id: '1',
+  name: 'Map',
+  models: ['Map/a.glb'],
+  items: [[0, 10, 20, 30, 0, 0, 0, 1, 1, 1]],
+  total: 1,
+  unresolved: 0
 };
-const legacy = JSON.stringify({ version: 1, nodes: [{
-  id: 'map', kind: 'map', name: 'Map', mapId: '1', parentId: null,
-  position: [1, 2, 3], rotation: [0, 0, 0], scale: [1, 1, 1], visible: true, locked: false
-}] });
+const legacy = JSON.stringify({
+  version: 1,
+  nodes: [
+    {
+      id: 'map',
+      kind: 'map',
+      name: 'Map',
+      mapId: '1',
+      parentId: null,
+      position: [1, 2, 3],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      visible: true,
+      locked: false
+    }
+  ]
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe('document loading', () => {
@@ -24,7 +41,9 @@ describe('document loading', () => {
       expect(studio.store.canUndo).toBe(false);
       expect(studio.autosaveBlocked).toBe(false);
       expect(storage.get(SCENE_KEY)).toBe(legacy);
-    } finally { studio.dispose(); }
+    } finally {
+      studio.dispose();
+    }
   });
   it('preserves the original save on missing map data, and permits recovery through a valid import', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Missing', { status: 404 })));
@@ -37,11 +56,20 @@ describe('document loading', () => {
       expect(studio.message).toMatch(/original save preserved.*404/);
       await studio.importJson(new File([JSON.stringify({ version: 3, entities: [] })], 'empty.json'));
       expect(studio.autosaveBlocked).toBe(false);
-    } finally { studio.dispose(); }
+    } finally {
+      studio.dispose();
+    }
   });
   it('cancels a pending map insertion when Undo is pressed, even with no existing history', async () => {
     let resolve!: (response: Response) => void;
-    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise((done) => { resolve = done; })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        })
+      )
+    );
     const studio = new Studio();
     try {
       const insertion = studio.addMap({ id: '1', name: 'Map' });
@@ -50,7 +78,9 @@ describe('document loading', () => {
       expect(await insertion).toBe('');
       expect(studio.store.nodes).toEqual([]);
       expect(studio.store.canUndo).toBe(false);
-    } finally { studio.dispose(); }
+    } finally {
+      studio.dispose();
+    }
   });
   it('inserts a whole map as a single undoable action, with stable IDs on redo', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(map))));
@@ -63,7 +93,9 @@ describe('document loading', () => {
       expect(studio.store.nodes).toHaveLength(0);
       studio.store.redo();
       expect(studio.store.serialize()).toBe(data);
-    } finally { studio.dispose(); }
+    } finally {
+      studio.dispose();
+    }
   });
   it('reports fatal JSON validation paths instead of replacing the current scene', async () => {
     const studio = new Studio();
@@ -73,6 +105,8 @@ describe('document loading', () => {
       await studio.importJson(new File(['{"version":99,"nodes":[]}'], 'bad.json'));
       expect(studio.store.serialize()).toBe(before);
       expect(studio.message).toMatch(/Cannot load scene:.*version/);
-    } finally { studio.dispose(); }
+    } finally {
+      studio.dispose();
+    }
   });
 });

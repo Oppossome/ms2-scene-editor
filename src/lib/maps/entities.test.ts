@@ -8,21 +8,31 @@ import { PropEntity } from '../entities/prop.svelte.js';
 import type { MapData } from '../types';
 
 const source: MapData = {
-  id: '1', name: 'Test map', models: ['Map/a.glb'],
-  items: [[0, 10, 20, 30, 0, 0, 0, 1, 1, 1]], total: 3, unresolved: 2,
+  id: '1',
+  name: 'Test map',
+  models: ['Map/a.glb'],
+  items: [[0, 10, 20, 30, 0, 0, 0, 1, 1, 1]],
+  total: 3,
+  unresolved: 2,
   environment: { background: 'Resource/Image/bg/test.png', fog: { color: [1, 2, 3], near: 10, far: 100 } }
 };
 
 describe('decomposeForScene', () => {
   const matrix = (position: number[], rotation: number[], scale: number[]) =>
-    new Matrix4().compose(new Vector3(...position), new Quaternion().setFromEuler(new Euler(rotation[0], rotation[1], rotation[2], 'XYZ')), new Vector3(...scale));
+    new Matrix4().compose(
+      new Vector3(...position),
+      new Quaternion().setFromEuler(new Euler(rotation[0], rotation[1], rotation[2], 'XYZ')),
+      new Vector3(...scale)
+    );
 
   it('round-trips a placement', () => {
     const m = matrix([1, 2, 3], [0.1, 0.5, -0.3], [2, 2, 2]);
     const parts = decomposeForScene(m);
     expect(parts.position).toEqual([1, 2, 3]);
     expect(parts.scale.every((s) => Math.abs(s - 2) < 1e-6)).toBe(true);
-    matrix(parts.position, parts.rotation, parts.scale).elements.forEach((v, i) => expect(v).toBeCloseTo(m.elements[i], 5));
+    matrix(parts.position, parts.rotation, parts.scale).elements.forEach((v, i) =>
+      expect(v).toBeCloseTo(m.elements[i], 5)
+    );
   });
 
   it('extracts the permuted scale of a Z-up placement', () => {
@@ -41,6 +51,8 @@ describe('composeMap', () => {
     children[0].position.forEach((v, i) => expect(v).toBeCloseTo([10, 30, -20][i]));
     expect(children[1]).toBeInstanceOf(LightingEntity);
     expect(children[1]).toMatchObject({ environment: source.environment });
-    expect((composeMap(group, { ...source, items: [], environment: undefined })[0] as LightingEntity).environment).toEqual({});
+    expect(
+      (composeMap(group, { ...source, items: [], environment: undefined })[0] as LightingEntity).environment
+    ).toEqual({});
   });
 });

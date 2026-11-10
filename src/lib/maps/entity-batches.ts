@@ -42,14 +42,25 @@ export class EntityBatches {
       members.push(prop);
       groups.set(path, members);
     }
-    for (const [path, batch] of this.batches) if (!groups.has(path)) {
-      this.release(batch);
-      this.batches.delete(path);
-    }
+    for (const [path, batch] of this.batches)
+      if (!groups.has(path)) {
+        this.release(batch);
+        this.batches.delete(path);
+      }
     for (const [path, members] of groups) {
       let batch = this.batches.get(path);
       if (!batch) {
-        batch = { path, members, parts: [], ids: [], capacity: 0, loaded: false, matrices: new Map(), bounds: new Box3(), dynamic: false };
+        batch = {
+          path,
+          members,
+          parts: [],
+          ids: [],
+          capacity: 0,
+          loaded: false,
+          matrices: new Map(),
+          bounds: new Box3(),
+          dynamic: false
+        };
         this.batches.set(path, batch);
         this.queue.push(batch);
       }
@@ -84,7 +95,9 @@ export class EntityBatches {
       if (this.disposed || this.batches.get(batch.path) !== batch) return;
       model.scene.updateWorldMatrix(true, true);
       let skinned = false;
-      model.scene.traverse((object) => { if ('isSkinnedMesh' in object) skinned = true; });
+      model.scene.traverse((object) => {
+        if ('isSkinnedMesh' in object) skinned = true;
+      });
       if (skinned || model.animations.length) {
         this.batches.delete(batch.path);
         this.fallback(batch.path);
@@ -93,7 +106,8 @@ export class EntityBatches {
       model.scene.traverse((object) => {
         if (!(object instanceof Mesh) || 'isSkinnedMesh' in object) return;
         object.geometry.computeBoundingBox();
-        if (object.geometry.boundingBox) batch.bounds.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
+        if (object.geometry.boundingBox)
+          batch.bounds.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
         const mesh = new InstancedMesh(object.geometry, object.material, batch.members.length);
         batch.parts.push({ source: object, mesh });
         this.owners.set(mesh, batch);
@@ -103,7 +117,9 @@ export class EntityBatches {
       batch.loaded = true;
       this.apply(batch);
       this.changed();
-    } catch (error) { this.error(`Map model failed: ${batch.path}`, error); }
+    } catch (error) {
+      this.error(`Map model failed: ${batch.path}`, error);
+    }
   }
 
   private apply(batch: Batch) {
@@ -120,7 +136,8 @@ export class EntityBatches {
       resized = true;
     }
     const active = batch.members.filter((member) => {
-      for (let object: Group | null = member.object; object; object = object.parent as Group | null) if (!object.visible) return false;
+      for (let object: Group | null = member.object; object; object = object.parent as Group | null)
+        if (!object.visible) return false;
       return true;
     });
     const ids = active.map((member) => member.id);
@@ -166,7 +183,10 @@ export class EntityBatches {
   }
 
   private release(batch: Batch) {
-    for (const { mesh } of batch.parts) { mesh.removeFromParent(); mesh.dispose(); }
+    for (const { mesh } of batch.parts) {
+      mesh.removeFromParent();
+      mesh.dispose();
+    }
   }
   dispose() {
     this.disposed = true;

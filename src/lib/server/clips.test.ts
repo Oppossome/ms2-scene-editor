@@ -40,7 +40,12 @@ describe('durationFromGltfJson', () => {
   it('is 0 without animations, samplers or usable accessors', () => {
     expect(durationFromGltfJson({})).toBe(0);
     expect(durationFromGltfJson({ animations: [{}] })).toBe(0);
-    expect(durationFromGltfJson({ accessors: [{}, { max: ['x' as never] }], animations: [{ samplers: [{ input: 0 }, { input: 1 }, { input: 9 }, {}] }] })).toBe(0);
+    expect(
+      durationFromGltfJson({
+        accessors: [{}, { max: ['x' as never] }],
+        animations: [{ samplers: [{ input: 0 }, { input: 1 }, { input: 9 }, {}] }]
+      })
+    ).toBe(0);
   });
 });
 

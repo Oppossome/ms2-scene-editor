@@ -19,7 +19,9 @@ describe('parseEnvironment', () => {
     expect(parseEnvironment(xml('<fog color="1,2,3" near="0" far="2000" />'))).toEqual({
       fog: { color: [1, 2, 3], near: 0, far: 2000 }
     });
-    expect(parseEnvironment(xml('<clientProperty bgDay="bg_cave_c.dds" />'))).toEqual({ background: 'Resource/Image/bg/bg_cave_c.png' });
+    expect(parseEnvironment(xml('<clientProperty bgDay="bg_cave_c.dds" />'))).toEqual({
+      background: 'Resource/Image/bg/bg_cave_c.png'
+    });
     expect(parseEnvironment(xml('<minimap />'))).toBeNull();
     expect(parseEnvironment('')).toBeNull();
   });
@@ -51,6 +53,10 @@ describe('parseEnvironment', () => {
   });
 
   it('reads attributes in any order and ignores spacing', () => {
-    expect(parseEnvironment(xml('<fog far="900" near="100" color=" 10, 20 ,30 "/>'))?.fog).toEqual({ color: [10, 20, 30], near: 100, far: 900 });
+    expect(parseEnvironment(xml('<fog far="900" near="100" color=" 10, 20 ,30 "/>'))?.fog).toEqual({
+      color: [10, 20, 30],
+      near: 100,
+      far: 900
+    });
   });
 });

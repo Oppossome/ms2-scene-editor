@@ -12,7 +12,11 @@ export function viewMenuItems(studio: Pick<Studio, 'showGrid' | 'look' | 'pickin
       separator: true,
       action: () => (studio.look = { ...look, background: 'map' })
     },
-    { label: 'No backdrop', checked: look.background === 'none', action: () => (studio.look = { ...look, background: 'none' }) },
+    {
+      label: 'No backdrop',
+      checked: look.background === 'none',
+      action: () => (studio.look = { ...look, background: 'none' })
+    },
     {
       label: look.image ? `Backdrop: ${look.image}...` : 'Choose backdrop...',
       checked: look.background === 'image',

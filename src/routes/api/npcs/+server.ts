@@ -9,5 +9,12 @@ let grouped: { source: unknown; groups: ReturnType<typeof groupNpcs> } | null = 
 export const GET: RequestHandler = ({ url }) => {
   const npcs = getNpcs();
   if (grouped?.source !== npcs) grouped = { source: npcs, groups: groupNpcs(npcs) };
-  return json(searchNpcs(grouped.groups, url.searchParams.get('q'), Number(url.searchParams.get('offset') ?? 0), Number(url.searchParams.get('limit') ?? 60)));
+  return json(
+    searchNpcs(
+      grouped.groups,
+      url.searchParams.get('q'),
+      Number(url.searchParams.get('offset') ?? 0),
+      Number(url.searchParams.get('limit') ?? 60)
+    )
+  );
 };

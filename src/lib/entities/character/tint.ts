@@ -57,7 +57,11 @@ export function parseChannelIndexes(value: unknown): ChannelIndexes | null {
  * The three tint colours for a palette: every channel takes its colour from the base row, except those the player
  * picked another row for (that row's colour *for that channel*). Unknown rows fall back to the base row, then row 0.
  */
-export function tintFromPalette(palette: PaletteColor[], base: number, picks?: ChannelIndexes | null): TintColors | undefined {
+export function tintFromPalette(
+  palette: PaletteColor[],
+  base: number,
+  picks?: ChannelIndexes | null
+): TintColors | undefined {
   const row = (i: number | undefined) => (i === undefined ? undefined : palette[i]);
   const fallback = row(base) ?? palette[0];
   if (!fallback) return undefined;

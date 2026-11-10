@@ -16,7 +16,9 @@ export const GET: RequestHandler = ({ params }) => {
   const cached = cache.get(record.id);
   if (cached) return json(cached);
 
-  const file = resolveAssetPath(`Resource/Exported/xblock/${record.xblock}.xblock`, EXTRACTED_ROOT, ['resource/exported/xblock']);
+  const file = resolveAssetPath(`Resource/Exported/xblock/${record.xblock}.xblock`, EXTRACTED_ROOT, [
+    'resource/exported/xblock'
+  ]);
   if (!file) error(404, 'Map data not found');
 
   const text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');

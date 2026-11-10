@@ -13,14 +13,21 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
 
 <div class="overlay" role="presentation" onpointerdown={close}>
-  <div class="dialog" role="dialog" aria-labelledby="report-title" tabindex="-1" onpointerdown={(e) => e.stopPropagation()}>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-labelledby="report-title"
+    tabindex="-1"
+    onpointerdown={(e) => e.stopPropagation()}
+  >
     <header>
       <strong id="report-title">Report an issue</strong>
       <button onclick={close} aria-label="Close">&times;</button>
     </header>
     <div class="body">
       <p class="weekend">
-        <strong>This is a weekend project.</strong> I can't make any guarantees about how quickly issues will be looked at or fixed.
+        <strong>This is a weekend project.</strong> I can't make any guarantees about how quickly issues will be looked at
+        or fixed.
       </p>
       <p>Bug reports and suggestions are still welcome on the issue tracker.</p>
     </div>

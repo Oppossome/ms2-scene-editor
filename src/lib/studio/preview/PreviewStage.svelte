@@ -20,9 +20,19 @@
 
   {#if preview.clips.length}
     <div class="controls">
-      <div class="picker"><ClipPicker clips={preview.clips} value={preview.clip} source={preview.source} oncommit={(name) => void preview.play(name)} /></div>
-      <button onclick={() => preview.togglePlay()} disabled={!preview.clip}>{preview.playing ? 'Pause' : 'Play'}</button>
-      <label class="loop"><input type="checkbox" checked={preview.loop} onchange={(e) => preview.setLoop(e.currentTarget.checked)} /> loop</label>
+      <div class="picker">
+        <ClipPicker
+          clips={preview.clips}
+          value={preview.clip}
+          source={preview.source}
+          oncommit={(name) => void preview.play(name)}
+        />
+      </div>
+      <button onclick={() => preview.togglePlay()} disabled={!preview.clip}>{preview.playing ? 'Pause' : 'Play'}</button
+      >
+      <label class="loop"
+        ><input type="checkbox" checked={preview.loop} onchange={(e) => preview.setLoop(e.currentTarget.checked)} /> loop</label
+      >
     </div>
   {/if}
 </div>

@@ -9,7 +9,9 @@ describe('entity state', () => {
     const second = new GroupEntity(source).restore(source);
     (source.position as number[])[0] = 90;
     expect(first.position).toEqual([0, 0, 0]);
-    expect(() => { (first.position as number[])[0] = 50; }).toThrow();
+    expect(() => {
+      (first.position as number[])[0] = 50;
+    }).toThrow();
     const saved = first.toJSON();
     expect(saved.position).toEqual([0, 0, 0]);
     expect(second.position).toEqual([0, 0, 0]);
@@ -45,13 +47,25 @@ describe('BaseEntity controls', () => {
     expect(rotation).toMatchObject({ type: 'vec3', value: [0, 90, 0] });
     if (rotation.type !== 'vec3') throw new Error('Expected vector control');
     expect(rotation.edit([0, 180, 0])).toEqual({ rotation: [0, Math.PI, 0] });
-    expect(new Set(group.controls(context).map((row) => row.section))).toEqual(new Set(['Data', 'Transform', 'Appearance', 'Behaviour']));
+    expect(new Set(group.controls(context).map((row) => row.section))).toEqual(
+      new Set(['Data', 'Transform', 'Appearance', 'Behaviour'])
+    );
   });
 });
 
 describe('BaseEntity JSON', () => {
   it('writes only registered values and the type, never runtime state', () => {
     const json = new GroupEntity().toJSON();
-    expect(Object.keys(json).sort()).toEqual(['id', 'locked', 'name', 'parentId', 'position', 'rotation', 'scale', 'type', 'visible']);
+    expect(Object.keys(json).sort()).toEqual([
+      'id',
+      'locked',
+      'name',
+      'parentId',
+      'position',
+      'rotation',
+      'scale',
+      'type',
+      'visible'
+    ]);
   });
 });

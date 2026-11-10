@@ -41,8 +41,16 @@ describe('scene rendering integration', () => {
     let first!: (value: { object: Group; animations: [] }) => void;
     let second!: (value: { object: Group; animations: [] }) => void;
     mocks.instantiate
-      .mockReturnValueOnce(new Promise((resolve) => { first = resolve; }))
-      .mockReturnValueOnce(new Promise((resolve) => { second = resolve; }));
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          first = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          second = resolve;
+        })
+      );
     const id = store.add({ type: 'prop', name: 'Pending', glb: 'Map/first.glb' });
     render();
     const entity = store.node(id)!;

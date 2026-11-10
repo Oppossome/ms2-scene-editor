@@ -66,23 +66,29 @@ export interface BoneSelection {
 /** A new entity from a creation spec; the same validation as restoring a save applies. */
 function createEntity(spec: NewNode, parentId: string | null): Entity {
   const { type, beforeId: _before, channelColors, ...rest } = spec;
-  return restoreEntity(
-    {
-      position: [...ZERO],
-      rotation: [...ZERO],
-      scale: [...ONE],
-      ...(type === 'character' ? { gender: 1, skin: DEFAULT_SKIN, eye: DEFAULT_EYE } : {}),
-      ...(type === 'item' ? { slots: [] } : {}),
-      ...omitUndefined({ ...rest, channelColors: channelColors && Object.keys(channelColors).length ? { ...channelColors } : undefined }),
-      type,
-      parentId
-    }
-  );
+  return restoreEntity({
+    position: [...ZERO],
+    rotation: [...ZERO],
+    scale: [...ONE],
+    ...(type === 'character' ? { gender: 1, skin: DEFAULT_SKIN, eye: DEFAULT_EYE } : {}),
+    ...(type === 'item' ? { slots: [] } : {}),
+    ...omitUndefined({
+      ...rest,
+      channelColors: channelColors && Object.keys(channelColors).length ? { ...channelColors } : undefined
+    }),
+    type,
+    parentId
+  });
 }
 
 const itemSpec = (item: NewItem): NewNode => ({
-  type: 'item', name: item.name, itemId: item.itemId, slots: item.slots, color: item.color,
-  channelColors: item.channelColors, attachBone: item.attachBone
+  type: 'item',
+  name: item.name,
+  itemId: item.itemId,
+  slots: item.slots,
+  color: item.color,
+  channelColors: item.channelColors,
+  attachBone: item.attachBone
 });
 
 /** Where a new node may go within `list`: items need a character parent, nothing lives on an item. */
@@ -220,7 +226,8 @@ export class SceneState {
       throw error;
     } finally {
       if (!--this.transactionDepth) {
-        if (this.pendingSnapshot !== null && this.serializeNodes() === this.pendingSnapshot) this.pendingSnapshot = null;
+        if (this.pendingSnapshot !== null && this.serializeNodes() === this.pendingSnapshot)
+          this.pendingSnapshot = null;
         this.commit();
       }
     }
@@ -242,7 +249,10 @@ export class SceneState {
     if (parentId === undefined) return '';
     this.record();
     const bone = this.node(parentId)?.type === 'character' ? spec.attachBone : undefined;
-    const node = createEntity({ ...spec, attachBone: bone, name: uniqueName(this.nodes, parentId, spec.name) }, parentId);
+    const node = createEntity(
+      { ...spec, attachBone: bone, name: uniqueName(this.nodes, parentId, spec.name) },
+      parentId
+    );
     this.nodes = this.insert(this.nodes, node, spec.beforeId);
     if (select) this.select(node.id);
     if (parentId) this.setExpanded(parentId, true);
@@ -274,27 +284,50 @@ export class SceneState {
     if (this.node(characterId)?.type !== 'character') return;
     const current = this.itemsOf(characterId);
     const same = (node: ItemEntity, item: NewItem) =>
-      node.itemId === item.itemId && node.name === item.name && node.color === item.color &&
+      node.itemId === item.itemId &&
+      node.name === item.name &&
+      node.color === item.color &&
       JSON.stringify(node.slots) === JSON.stringify(item.slots) &&
       JSON.stringify(node.channelColors) === JSON.stringify(item.channelColors) &&
-      !node.attachBone && [...node.position, ...node.rotation].every((v) => v === 0) && node.scale.every((v) => v === 1);
+      !node.attachBone &&
+      [...node.position, ...node.rotation].every((v) => v === 0) &&
+      node.scale.every((v) => v === 1);
     if (current.length === items.length && current.every((node, i) => same(node, items[i]))) return;
     this.record();
     const kept = this.nodes.filter((n) => !(n.type === 'item' && n.parentId === characterId));
-    this.nodes = [...kept, ...items.map((item) => createEntity({ ...itemSpec(item), attachBone: undefined }, characterId))];
+    this.nodes = [
+      ...kept,
+      ...items.map((item) => createEntity({ ...itemSpec(item), attachBone: undefined }, characterId))
+    ];
     this.setExpanded(characterId, true);
   }
 
   /** A character with its outfit, in one undo step. */
   addCharacter(
-    spec: { name: string; gender: 0 | 1; skin?: number; eye?: number; expression?: FaceExpression; parentId?: string | null; position?: Vec3 },
+    spec: {
+      name: string;
+      gender: 0 | 1;
+      skin?: number;
+      eye?: number;
+      expression?: FaceExpression;
+      parentId?: string | null;
+      position?: Vec3;
+    },
     items: NewItem[] = []
   ): string {
     const parentId = parentIn(this.nodes, { type: 'character', name: spec.name, parentId: spec.parentId });
     if (parentId === undefined) return '';
     this.record();
     const character = createEntity(
-      { type: 'character', name: spec.name, gender: spec.gender, skin: spec.skin, eye: spec.eye, expression: spec.expression, position: spec.position },
+      {
+        type: 'character',
+        name: spec.name,
+        gender: spec.gender,
+        skin: spec.skin,
+        eye: spec.eye,
+        expression: spec.expression,
+        position: spec.position
+      },
       parentId
     );
     const children = items.map((item) => createEntity({ ...itemSpec(item), attachBone: undefined }, character.id));
@@ -321,7 +354,10 @@ export class SceneState {
     if (!copies.length) return null;
     this.record();
     const root = copies[0];
-    root.set({ name: uniqueName(this.nodes, root.parentId, `${src.name} copy`), position: [src.position[0] + 60, src.position[1], src.position[2] + 60] });
+    root.set({
+      name: uniqueName(this.nodes, root.parentId, `${src.name} copy`),
+      position: [src.position[0] + 60, src.position[1], src.position[2] + 60]
+    });
     this.nodes = [...this.nodes, ...copies];
     this.select(root.id);
     return root.id;
@@ -343,7 +379,8 @@ export class SceneState {
         if (!entity) continue;
         if ('type' in values || 'id' in values) throw new Error('An entity keeps its type and id');
         if ('parentId' in values) throw new Error('Use reparent to change the hierarchy');
-        if (values.attachBone && this.node(entity.parentId)?.type !== 'character') throw new Error('A bone mount needs a character parent');
+        if (values.attachBone && this.node(entity.parentId)?.type !== 'character')
+          throw new Error('A bone mount needs a character parent');
         const changed = entity.prepare(values);
         if (changed.size) prepared.push({ entity, values: changed });
       }
@@ -410,7 +447,10 @@ export class SceneState {
     const node = this.node(id);
     if (!node || node.type === 'item') return null;
     this.record();
-    const group = createEntity({ type: 'group', name: uniqueName(this.nodes, node.parentId, 'Group'), attachBone: node.attachBone }, node.parentId);
+    const group = createEntity(
+      { type: 'group', name: uniqueName(this.nodes, node.parentId, 'Group'), attachBone: node.attachBone },
+      node.parentId
+    );
     this.commit();
     node.link(group.id);
     this.changedIds.add(id);

@@ -28,6 +28,14 @@ The game's files are not included. The editor reads the copies you extract from 
 
 Node isn't installed globally on every machine, so the repo's `shell.nix` provides Node plus the converters the extraction scripts use (ffmpeg, vgmstream, ImageMagick). With Nix, run `nix-shell` first, or prefix commands with `nix shell nixpkgs#nodejs --command`.
 
+## Development checks
+
+- `npm run lint` checks JavaScript, TypeScript and Svelte with ESLint; `npm run lint:fix` applies safe automatic fixes.
+- `npm run format:check` checks formatting; `npm run format` formats supported source, configuration and documentation files with Prettier.
+- `npm run check`, `npm test` and `npm run build` check types, run tests and build the app.
+
+CI runs all checks. Generated output, extracted game assets and vendored code are excluded from linting and formatting.
+
 ## Docker
 
 The `Dockerfile` builds a production image. The game's files are not in the image. Mount your extracted folder at `/extracted`:

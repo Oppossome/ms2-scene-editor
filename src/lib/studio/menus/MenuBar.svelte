@@ -33,7 +33,13 @@
       disabled: studio.busy === 'export' || store.nodes.length === 0,
       separator: true
     },
-    { label: 'Clear scene', action: () => store.clear(), disabled: store.nodes.length === 0, danger: true, separator: true }
+    {
+      label: 'Clear scene',
+      action: () => store.clear(),
+      disabled: store.nodes.length === 0,
+      danger: true,
+      separator: true
+    }
   ]);
 
   const viewItems = $derived(viewMenuItems(studio));
@@ -80,10 +86,14 @@
   >
   <span class="sep"></span>
   <button class="icon" onclick={() => store.undo()} disabled={!store.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
+    <svg viewBox="0 0 24 24" aria-hidden="true"
+      ><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg
+    >
   </button>
   <button class="icon" onclick={() => store.redo()} disabled={!store.canRedo} title="Redo (Ctrl+Y)" aria-label="Redo">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" /></svg>
+    <svg viewBox="0 0 24 24" aria-hidden="true"
+      ><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" /></svg
+    >
   </button>
   <input bind:this={fileInput} type="file" accept="application/json" onchange={onFile} hidden />
 </div>

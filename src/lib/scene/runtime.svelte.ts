@@ -1,6 +1,19 @@
 import {
-  Box3, Box3Helper, Color, Euler, Group, Material, Mesh, MeshBasicMaterial,
-  Object3D, Quaternion, Raycaster, SphereGeometry, Vector2, Vector3, type Camera
+  Box3,
+  Box3Helper,
+  Color,
+  Euler,
+  Group,
+  Material,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  Quaternion,
+  Raycaster,
+  SphereGeometry,
+  Vector2,
+  Vector3,
+  type Camera
 } from 'three';
 import { untrack } from 'svelte';
 import type { AnimationPlayer } from '../assets/animation.js';
@@ -32,7 +45,8 @@ function visibleBounds(roots: Object3D[]): Box3 {
         bounds.union(part.copy(object.boundingBox).applyMatrix4(object.matrixWorld));
       } else if (object instanceof Mesh) {
         object.geometry.computeBoundingBox();
-        if (object.geometry.boundingBox) bounds.union(part.copy(object.geometry.boundingBox).applyMatrix4(object.matrixWorld));
+        if (object.geometry.boundingBox)
+          bounds.union(part.copy(object.geometry.boundingBox).applyMatrix4(object.matrixWorld));
       }
     });
   }
@@ -64,8 +78,14 @@ export class SceneRuntime {
   private children = new Map<string | null, Entity[]>();
   private raycaster = new Raycaster();
   private box = new Box3Helper(new Box3(), new Color(0xffd84d));
-  private boneMarker = new Mesh(new SphereGeometry(2, 12, 8), new MeshBasicMaterial({ color: 0xffd84d, depthTest: false, transparent: true }));
-  private selection: { id: string | null; bone: { characterId: string; bone: string } | null } = { id: null, bone: null };
+  private boneMarker = new Mesh(
+    new SphereGeometry(2, 12, 8),
+    new MeshBasicMaterial({ color: 0xffd84d, depthTest: false, transparent: true })
+  );
+  private selection: { id: string | null; bone: { characterId: string; bone: string } | null } = {
+    id: null,
+    bone: null
+  };
   private frame = 0;
   private batched = new Set<PropEntity>();
   /** Models that cannot share a batch (skinned or animated): their props render as ordinary models. */
@@ -173,7 +193,11 @@ export class SceneRuntime {
   }
 
   private visibleEntity(entity: Entity): boolean {
-    for (let current: Entity | undefined = entity; current; current = current.parentId ? this.byId.get(current.parentId) : undefined) {
+    for (
+      let current: Entity | undefined = entity;
+      current;
+      current = current.parentId ? this.byId.get(current.parentId) : undefined
+    ) {
       if (!current.visible) return false;
     }
     return true;
@@ -189,7 +213,9 @@ export class SceneRuntime {
   defaultBoneOf(itemId: string): string {
     void this.version;
     const item = this.byId.get(itemId);
-    return item instanceof ItemEntity && item.parentId ? (this.rigOf(item.parentId)?.defaultBoneOf(item.itemId) ?? '') : '';
+    return item instanceof ItemEntity && item.parentId
+      ? (this.rigOf(item.parentId)?.defaultBoneOf(item.itemId) ?? '')
+      : '';
   }
 
   boneTree(characterId: string): BoneInfo[] {
@@ -230,7 +256,8 @@ export class SceneRuntime {
       for (const entity of nodes) {
         const fresh = !this.rendered.has(entity.id);
         if (fresh) this.rendered.set(entity.id, entity);
-        if (fresh || entity.renderedRevision !== entity.revision || changedIds?.has(entity.id)) entity.render(this.context);
+        if (fresh || entity.renderedRevision !== entity.revision || changedIds?.has(entity.id))
+          entity.render(this.context);
       }
       this.reparentAll();
       this.batches.sync([...this.batched], this.boneMountedProps());
@@ -371,7 +398,11 @@ export class SceneRuntime {
     const scale = new Vector3();
     local.decompose(position, quaternion, scale);
     const euler = new Euler().setFromQuaternion(quaternion, 'XYZ');
-    return { position: [position.x, position.y, position.z], rotation: [euler.x, euler.y, euler.z], scale: [scale.x, scale.y, scale.z] };
+    return {
+      position: [position.x, position.y, position.z],
+      rotation: [euler.x, euler.y, euler.z],
+      scale: [scale.x, scale.y, scale.z]
+    };
   }
 
   // ----- export -----------------------------------------------------------------------------------------------
@@ -382,7 +413,9 @@ export class SceneRuntime {
    * nodes by name).
    */
   async exportGlb(rootId: string | null, withClip: boolean): Promise<ArrayBuffer | null> {
-    const roots = rootId ? [rootId] : this.nodes.filter((entity) => entity.parentId === null).map((entity) => entity.id);
+    const roots = rootId
+      ? [rootId]
+      : this.nodes.filter((entity) => entity.parentId === null).map((entity) => entity.id);
     const members = new Set<string>();
     for (const id of roots) {
       members.add(id);
@@ -408,7 +441,11 @@ export class SceneRuntime {
         const entity = this.byId.get(id);
         if (!(entity instanceof PropEntity) || !entity.batched || !entity.visible) continue;
         let omitted = false;
-        for (let parent = this.byId.get(entity.parentId ?? ''); parent && members.has(parent.id); parent = this.byId.get(parent.parentId ?? '')) {
+        for (
+          let parent = this.byId.get(entity.parentId ?? '');
+          parent && members.has(parent.id);
+          parent = this.byId.get(parent.parentId ?? '')
+        ) {
           if (isMap(parent)) omitted = true;
         }
         if (omitted) continue;

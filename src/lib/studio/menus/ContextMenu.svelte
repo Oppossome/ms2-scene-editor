@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import type { MenuItem } from '../controller.svelte.js';
 
-
   let { x, y, items, onclose }: { x: number; y: number; items: MenuItem[]; onclose: () => void } = $props();
 
   let el = $state<HTMLDivElement>();
@@ -23,17 +22,29 @@
   }
 </script>
 
-<svelte:window onpointerdown={(e) => !el?.contains(e.target as Node) && onclose()} onkeydown={(e) => e.key === 'Escape' && onclose()} onblur={onclose} />
+<svelte:window
+  onpointerdown={(e) => !el?.contains(e.target as Node) && onclose()}
+  onkeydown={(e) => e.key === 'Escape' && onclose()}
+  onblur={onclose}
+/>
 
 <div class="menu" bind:this={el} style:left={`${left || x}px`} style:top={`${top || y}px`} role="menu">
-  {#each items as item}
+  {#each items as item (item)}
     {#if item.separator}<hr />{/if}
     {#if item.checked !== undefined}
-      <button role="menuitemcheckbox" aria-checked={item.checked} class="check" disabled={item.disabled} onclick={() => run(item)}>
+      <button
+        role="menuitemcheckbox"
+        aria-checked={item.checked}
+        class="check"
+        disabled={item.disabled}
+        onclick={() => run(item)}
+      >
         <span class="mark">{item.checked ? '\u2713' : ''}</span>{item.label}
       </button>
     {:else}
-      <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={() => run(item)}>{item.label}</button>
+      <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={() => run(item)}
+        >{item.label}</button
+      >
     {/if}
   {/each}
 </div>

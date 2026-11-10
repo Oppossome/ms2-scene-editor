@@ -49,7 +49,10 @@ export function resolveAssetPath(
   allowed: string[] = ALLOWED_PREFIXES
 ): string | null {
   if (urlPath.includes('\0')) return null;
-  const segments = urlPath.replace(/\\/g, '/').split('/').filter((s) => s !== '' && s !== '.');
+  const segments = urlPath
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((s) => s !== '' && s !== '.');
   if (segments.length === 0 || segments.some((s) => s === '..')) return null;
 
   const lower = segments.map((s) => s.toLowerCase()).join('/');

@@ -20,7 +20,10 @@ function attributes(xml: string, tag: string): Record<string, string> | null {
  * \`<fog color="199,237,255" near="5276" far="20000"/>\` the distance fog. \`backdropExists\` says whether a converted image
  * is there, so a missing one is left out.
  */
-export function parseEnvironment(xml: string, backdropExists: (path: string) => boolean = () => true): MapEnvironment | null {
+export function parseEnvironment(
+  xml: string,
+  backdropExists: (path: string) => boolean = () => true
+): MapEnvironment | null {
   const env: MapEnvironment = {};
 
   const stem = /^(.+)\.dds$/i.exec(attributes(xml, 'clientProperty')?.bgDay?.trim() ?? '')?.[1];

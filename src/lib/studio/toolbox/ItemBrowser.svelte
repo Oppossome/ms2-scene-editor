@@ -54,7 +54,12 @@
     error = '';
     try {
       const offset = reset ? 0 : items.length;
-      const params = new URLSearchParams({ q: query, gender: String(gender), offset: String(offset), limit: String(PAGE) });
+      const params = new URLSearchParams({
+        q: query,
+        gender: String(gender),
+        offset: String(offset),
+        limit: String(PAGE)
+      });
       if (slot) params.set('slot', slot);
       const res = await fetch(`/api/items?${params}`);
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -90,7 +95,7 @@
     <input type="search" bind:value={query} placeholder="Search items..." />
     <select bind:value={slot}>
       <option value="">All slots</option>
-      {#each SLOT_ORDER as s}
+      {#each SLOT_ORDER as s (s)}
         <option value={s}>{slotLabel(s)}</option>
       {/each}
     </select>
@@ -121,7 +126,9 @@
       {#if error}
         <li><button class="more" onclick={() => fetchPage(false)}>Retry</button></li>
       {:else}
-        <li class="sentinel" aria-hidden="true" use:nearEnd={{ onnearend: more, state: [items.length, loading] }}>{loading ? 'Loading...' : ''}</li>
+        <li class="sentinel" aria-hidden="true" use:nearEnd={{ onnearend: more, state: [items.length, loading] }}>
+          {loading ? 'Loading...' : ''}
+        </li>
       {/if}
     {/if}
   </ul>

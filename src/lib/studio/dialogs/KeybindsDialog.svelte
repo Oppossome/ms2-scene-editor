@@ -9,7 +9,13 @@
       title: 'Editing',
       rows: [
         { action: 'Undo', keys: [['Ctrl', 'Z']] },
-        { action: 'Redo', keys: [['Ctrl', 'Shift', 'Z'], ['Ctrl', 'Y']] },
+        {
+          action: 'Redo',
+          keys: [
+            ['Ctrl', 'Shift', 'Z'],
+            ['Ctrl', 'Y']
+          ]
+        },
         { action: 'Duplicate', keys: [['Ctrl', 'D']] },
         { action: 'Group', keys: [['Ctrl', 'G']] },
         { action: 'Delete', keys: [['Delete'], ['Backspace']] },
@@ -31,7 +37,13 @@
       title: 'Animation',
       rows: [
         { action: 'Previous / next frame', keys: [[','], ['.']] },
-        { action: 'Previous / next 10 frames', keys: [['Shift', ','], ['Shift', '.']] }
+        {
+          action: 'Previous / next 10 frames',
+          keys: [
+            ['Shift', ','],
+            ['Shift', '.']
+          ]
+        }
       ]
     },
     {
@@ -53,24 +65,30 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
 
 <div class="overlay" role="presentation" onpointerdown={close}>
-  <div class="dialog" role="dialog" aria-labelledby="keybinds-title" tabindex="-1" onpointerdown={(e) => e.stopPropagation()}>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-labelledby="keybinds-title"
+    tabindex="-1"
+    onpointerdown={(e) => e.stopPropagation()}
+  >
     <header>
       <strong id="keybinds-title">Keybinds</strong>
       <button onclick={close} aria-label="Close">&times;</button>
     </header>
     <div class="body">
-      {#each GROUPS as group}
+      {#each GROUPS as group (group.title)}
         <section>
           <h3>{group.title}</h3>
           <table>
             <tbody>
-              {#each group.rows as row}
+              {#each group.rows as row (row.action)}
                 <tr>
                   <td>{row.action}</td>
                   <td class="keys">
-                    {#each row.keys as chord, i}
+                    {#each row.keys as chord, i (i)}
                       {#if i > 0}<span class="or">or</span>{/if}
-                      {#each chord as key, j}
+                      {#each chord as key, j (j)}
                         {#if j > 0}<span class="plus">+</span>{/if}
                         <kbd>{key}</kbd>
                       {/each}
@@ -148,7 +166,12 @@
     display: inline-block;
     min-width: 1.6em;
     padding: 2px 6px;
-    font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font:
+      12px ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Consolas,
+      monospace;
     text-align: center;
     color: var(--text, #e6e8f0);
     background: var(--panel-2);

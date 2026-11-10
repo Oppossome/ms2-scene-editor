@@ -16,9 +16,15 @@ export abstract class RiggedModel extends BaseEntity {
   readonly clipProperty = this.define('clip', new EntityProperty(optionalText, undefined));
   readonly speedProperty = this.define('speed', new EntityProperty(finite.positive().optional(), undefined));
   readonly freezeProperty = this.define('freeze', new EntityProperty(indexSchema.optional(), undefined));
-  get clip() { return this.clipProperty.value; }
-  get speed() { return this.speedProperty.value; }
-  get freeze() { return this.freezeProperty.value; }
+  get clip() {
+    return this.clipProperty.value;
+  }
+  get speed() {
+    return this.speedProperty.value;
+  }
+  get freeze() {
+    return this.freezeProperty.value;
+  }
 
   player: AnimationPlayer | null = null;
   protected clipRequested: string | undefined;
@@ -27,22 +33,45 @@ export abstract class RiggedModel extends BaseEntity {
   controls(ctx: PropContext): PropertyControl[] {
     const rows = super.controls(ctx);
     if (!ctx.clips.length) return rows;
-    return [...rows, {
-      key: 'clip', label: 'Clip', section: 'Animation', type: 'clip', value: this.clip ?? '', clips: ctx.clips,
-      edit: (value) => {
-        const clip = value || undefined;
-        const last = lastFrame(ctx.clips, clip);
-        // A held frame stays on the same frame of the new clip, or on its last one when that is shorter.
-        return { clip, ...(this.freeze !== undefined && last !== undefined ? { freeze: Math.min(this.freeze, last) } : {}) };
+    return [
+      ...rows,
+      {
+        key: 'clip',
+        label: 'Clip',
+        section: 'Animation',
+        type: 'clip',
+        value: this.clip ?? '',
+        clips: ctx.clips,
+        edit: (value) => {
+          const clip = value || undefined;
+          const last = lastFrame(ctx.clips, clip);
+          // A held frame stays on the same frame of the new clip, or on its last one when that is shorter.
+          return {
+            clip,
+            ...(this.freeze !== undefined && last !== undefined ? { freeze: Math.min(this.freeze, last) } : {})
+          };
+        }
+      },
+      {
+        key: 'speed',
+        label: 'Speed',
+        section: 'Animation',
+        type: 'number',
+        value: this.speed ?? 1,
+        step: 0.1,
+        min: 0.05,
+        edit: (speed) => ({ speed })
+      },
+      {
+        key: 'playback',
+        label: 'Playback',
+        section: 'Animation',
+        type: 'transport',
+        frame:
+          this.freeze === undefined ? undefined : Math.min(this.freeze, lastFrame(ctx.clips, this.clip) ?? this.freeze),
+        max: lastFrame(ctx.clips, this.clip)
       }
-    }, {
-      key: 'speed', label: 'Speed', section: 'Animation', type: 'number', value: this.speed ?? 1, step: 0.1, min: 0.05,
-      edit: (speed) => ({ speed })
-    }, {
-      key: 'playback', label: 'Playback', section: 'Animation', type: 'transport',
-      frame: this.freeze === undefined ? undefined : Math.min(this.freeze, lastFrame(ctx.clips, this.clip) ?? this.freeze),
-      max: lastFrame(ctx.clips, this.clip)
-    }];
+    ];
   }
 
   render(context: RenderContext) {

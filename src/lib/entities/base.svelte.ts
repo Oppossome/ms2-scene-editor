@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { Group, type Object3D } from 'three';
 import { ONE, ZERO, newId } from './constants.js';
 import { ENTITY_LABELS, type EntityInput, type EntityType } from './types.js';
-import { EntityProperty, Vector3Property, type PropContext, type PropertyControl, type RegisteredProperty } from './property.svelte.js';
+import {
+  EntityProperty,
+  Vector3Property,
+  type PropContext,
+  type PropertyControl,
+  type RegisteredProperty
+} from './property.svelte.js';
 import type { RenderContext } from './render-context.js';
 import { issueText, omitUndefined } from './validation.js';
 
@@ -26,41 +32,94 @@ export abstract class BaseEntity {
   /** The three.js group the transform applies to; absent for entities without geometry. */
   object: Group | null = null;
 
-  readonly nameProperty = this.define('name', new EntityProperty(text.trim().min(1), 'Entity', (value) => ({
-    key: 'name', label: 'Name', section: 'Data', type: 'string', value, edit: (name) => ({ name: name.trim() })
-  })));
+  readonly nameProperty = this.define(
+    'name',
+    new EntityProperty(text.trim().min(1), 'Entity', (value) => ({
+      key: 'name',
+      label: 'Name',
+      section: 'Data',
+      type: 'string',
+      value,
+      edit: (name) => ({ name: name.trim() })
+    }))
+  );
   readonly parentProperty = this.define('parentId', new EntityProperty(text.min(1).nullable(), null));
-  readonly boneProperty = this.define('attachBone', new EntityProperty(optionalText, undefined, (value, ctx) =>
-    ctx.parent?.type === 'character' && !(ctx.node.type === 'item' && ctx.skinned) ? {
-      key: 'attachBone', label: 'Attach to', section: 'Attachment', type: 'enum', value: value ?? '',
-      options: [
-        { value: '', label: ctx.node.type === 'item' ? `(default: ${ctx.defaultBone || 'none'})` : '(character root)' },
-        ...ctx.bones.map((bone) => ({ value: bone, label: bone.replace(/_/g, ' ') }))
-      ],
-      edit: (bone) => ({ attachBone: bone || undefined })
-    } : null));
+  readonly boneProperty = this.define(
+    'attachBone',
+    new EntityProperty(optionalText, undefined, (value, ctx) =>
+      ctx.parent?.type === 'character' && !(ctx.node.type === 'item' && ctx.skinned)
+        ? {
+            key: 'attachBone',
+            label: 'Attach to',
+            section: 'Attachment',
+            type: 'enum',
+            value: value ?? '',
+            options: [
+              {
+                value: '',
+                label: ctx.node.type === 'item' ? `(default: ${ctx.defaultBone || 'none'})` : '(character root)'
+              },
+              ...ctx.bones.map((bone) => ({ value: bone, label: bone.replace(/_/g, ' ') }))
+            ],
+            edit: (bone) => ({ attachBone: bone || undefined })
+          }
+        : null
+    )
+  );
   readonly positionProperty = this.define('position', new Vector3Property('position', [...ZERO]));
   readonly rotationProperty = this.define('rotation', new Vector3Property('rotation', [...ZERO]));
   readonly scaleProperty = this.define('scale', new Vector3Property('scale', [...ONE]));
-  readonly visibleProperty = this.define('visible', new EntityProperty(z.boolean(), true, (value) => ({
-    key: 'visible', label: 'Visible', section: 'Appearance', type: 'bool', value, edit: (visible) => ({ visible })
-  })));
-  readonly lockedProperty = this.define('locked', new EntityProperty(z.boolean(), false, (value) => ({
-    key: 'locked', label: 'Locked', section: 'Behaviour', type: 'bool', value, edit: (locked) => ({ locked })
-  })));
+  readonly visibleProperty = this.define(
+    'visible',
+    new EntityProperty(z.boolean(), true, (value) => ({
+      key: 'visible',
+      label: 'Visible',
+      section: 'Appearance',
+      type: 'bool',
+      value,
+      edit: (visible) => ({ visible })
+    }))
+  );
+  readonly lockedProperty = this.define(
+    'locked',
+    new EntityProperty(z.boolean(), false, (value) => ({
+      key: 'locked',
+      label: 'Locked',
+      section: 'Behaviour',
+      type: 'bool',
+      value,
+      edit: (locked) => ({ locked })
+    }))
+  );
 
   constructor(input: EntityInput = {}) {
     this.id = typeof input.id === 'string' && input.id ? input.id : newId();
   }
 
-  get name() { return this.nameProperty.value; }
-  get parentId() { return this.parentProperty.value; }
-  get attachBone() { return this.boneProperty.value; }
-  get position() { return this.positionProperty.value; }
-  get rotation() { return this.rotationProperty.value; }
-  get scale() { return this.scaleProperty.value; }
-  get visible() { return this.visibleProperty.value; }
-  get locked() { return this.lockedProperty.value; }
+  get name() {
+    return this.nameProperty.value;
+  }
+  get parentId() {
+    return this.parentProperty.value;
+  }
+  get attachBone() {
+    return this.boneProperty.value;
+  }
+  get position() {
+    return this.positionProperty.value;
+  }
+  get rotation() {
+    return this.rotationProperty.value;
+  }
+  get scale() {
+    return this.scaleProperty.value;
+  }
+  get visible() {
+    return this.visibleProperty.value;
+  }
+  get locked() {
+    return this.lockedProperty.value;
+  }
 
   protected define<T>(key: string, property: EntityProperty<T>): EntityProperty<T> {
     this.registered.set(key, property);
@@ -80,7 +139,7 @@ export abstract class BaseEntity {
         parsed = property.parse(value);
       } catch (error) {
         if (!(error instanceof z.ZodError)) throw error;
-        throw new Error(`${key}: ${issueText(error)}`);
+        throw new Error(`${key}: ${issueText(error)}`, { cause: error });
       }
       if (JSON.stringify(parsed) !== JSON.stringify(property.value)) prepared.set(property, parsed);
     }
@@ -116,7 +175,7 @@ export abstract class BaseEntity {
         values.set(property, property.parse(input[key]));
       } catch (error) {
         if (!(error instanceof z.ZodError)) throw error;
-        if (property.required) throw new Error(`${key}: ${issueText(error)}`);
+        if (property.required) throw new Error(`${key}: ${issueText(error)}`, { cause: error });
         issues.push(`${this.id}.${key}: ${issueText(error)}; default used`);
       }
     }
@@ -134,7 +193,13 @@ export abstract class BaseEntity {
   }
 
   controls(ctx: PropContext): PropertyControl[] {
-    const info = (key: string, label: string, value: string): PropertyControl => ({ key, label, value, type: 'readonly', section: 'Data' });
+    const info = (key: string, label: string, value: string): PropertyControl => ({
+      key,
+      label,
+      value,
+      type: 'readonly',
+      section: 'Data'
+    });
     return [
       ...[...this.registered.values()].flatMap((property) => property.control(ctx) ?? []),
       info('class', 'Class', ENTITY_LABELS[this.type]),

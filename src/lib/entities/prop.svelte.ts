@@ -9,7 +9,9 @@ export class PropEntity extends ModelEntity {
   readonly type = 'prop';
   /** Placed from a map: static, drawn with the other copies of its model in one shared batch when possible. */
   readonly instanceProperty = this.define('instanced', new EntityProperty(z.boolean().optional(), undefined));
-  get instanced() { return this.instanceProperty.value; }
+  get instanced() {
+    return this.instanceProperty.value;
+  }
   /** Runtime only: whether the scene's batch currently draws this prop. */
   batched = false;
 

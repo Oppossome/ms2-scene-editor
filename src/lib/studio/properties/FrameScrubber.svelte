@@ -54,8 +54,14 @@
       dragging = true;
       onstart();
     }}
-    onpointerup={() => { dragging = false; onend?.(); }}
-    onpointercancel={() => { dragging = false; onend?.(); }}
+    onpointerup={() => {
+      dragging = false;
+      onend?.();
+    }}
+    onpointercancel={() => {
+      dragging = false;
+      onend?.();
+    }}
     oninput={(e) => onscrub(e.currentTarget.valueAsNumber, dragging)}
   />
   <div class="info">

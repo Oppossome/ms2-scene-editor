@@ -19,7 +19,8 @@ export const DEFAULT_VIEW: ViewSettings = { background: 'map', image: null, fog:
 export function parseView(value: unknown): ViewSettings {
   const o = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const image = typeof o.image === 'string' && /^[\w .-]+$/.test(o.image) ? o.image : null;
-  const background: BackgroundMode = o.background === 'none' ? 'none' : o.background === 'image' && image ? 'image' : 'map';
+  const background: BackgroundMode =
+    o.background === 'none' ? 'none' : o.background === 'image' && image ? 'image' : 'map';
   return { background, image, fog: o.fog !== false };
 }
 

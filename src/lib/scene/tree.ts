@@ -41,7 +41,12 @@ export function rootOf(nodes: Entity[], id: string): Entity | undefined {
 export function pathOf(nodes: Entity[], id: string): string[] {
   const self = nodes.find((n) => n.id === id);
   if (!self) return [];
-  return [...ancestorsOf(nodes, id).reverse().map((n) => n.name), self.name];
+  return [
+    ...ancestorsOf(nodes, id)
+      .reverse()
+      .map((n) => n.name),
+    self.name
+  ];
 }
 
 /**
@@ -74,7 +79,11 @@ export function cloneSubtree(nodes: Entity[], id: string): Entity[] {
   members.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   const ids = new Map(members.map((n) => [n.id, newId()]));
   const copies = members.map((n) =>
-    restoreEntity({ ...n.toJSON(), id: ids.get(n.id), parentId: n.id === id ? n.parentId : (ids.get(n.parentId ?? '') ?? null) })
+    restoreEntity({
+      ...n.toJSON(),
+      id: ids.get(n.id),
+      parentId: n.id === id ? n.parentId : (ids.get(n.parentId ?? '') ?? null)
+    })
   );
   return [copies.find((c) => c.id === ids.get(id))!, ...copies.filter((c) => c.id !== ids.get(id))];
 }
@@ -91,7 +100,10 @@ export function uniqueName(nodes: Entity[], parentId: string | null, base: strin
 }
 
 /** Nodes in display order (depth first, siblings in array order) with their depth. */
-export function flatten(nodes: Entity[], isOpen: (id: string) => boolean = () => true): { node: Entity; depth: number }[] {
+export function flatten(
+  nodes: Entity[],
+  isOpen: (id: string) => boolean = () => true
+): { node: Entity; depth: number }[] {
   const byParent = new Map<string | null, Entity[]>();
   for (const n of nodes) {
     const list = byParent.get(n.parentId) ?? [];
@@ -108,4 +120,3 @@ export function flatten(nodes: Entity[], isOpen: (id: string) => boolean = () =>
   walk(null, 0);
   return out;
 }
-

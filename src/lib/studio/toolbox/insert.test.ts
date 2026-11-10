@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { entity as n } from '../../scene/testing';
 import { defaultInsertParent, itemTargetCharacter } from './insert';
 
-const nodes = [n('g', 'group'), n('hero', 'character', 'g'), n('hat', 'item', 'hero'), n('crate', 'prop'), n('map', 'group', null, { mapId: '1' })];
+const nodes = [
+  n('g', 'group'),
+  n('hero', 'character', 'g'),
+  n('hat', 'item', 'hero'),
+  n('crate', 'prop'),
+  n('map', 'group', null, { mapId: '1' })
+];
 
 describe('defaultInsertParent', () => {
   it('uses the selected node when it can hold children', () => {

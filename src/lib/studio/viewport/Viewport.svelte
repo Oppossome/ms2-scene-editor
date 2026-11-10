@@ -38,7 +38,11 @@
   }: Props = $props();
 </script>
 
-<div class="viewport" class:backdrop={!!background} style:background-image={background ? `url("${assetUrl(`converted/textures/${background}`)}")` : undefined}>
+<div
+  class="viewport"
+  class:backdrop={!!background}
+  style:background-image={background ? `url("${assetUrl(`converted/textures/${background}`)}")` : undefined}
+>
   <Canvas>
     <Stage {object} {frameToken} {grid} {gridSize} {onTick} {interactive} {onGroundClick} {viewApi} {fog}>
       {@render children?.()}

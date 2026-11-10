@@ -72,7 +72,9 @@ export function buildMap(
         const matrix = new Matrix4();
         for (const part of parts) {
           const instanced = new InstancedMesh(part.geometry, part.material, items.length);
-          items.forEach((item, i) => instanced.setMatrixAt(i, matrix.multiplyMatrices(entityMatrix(item), part.matrixWorld)));
+          items.forEach((item, i) =>
+            instanced.setMatrixAt(i, matrix.multiplyMatrices(entityMatrix(item), part.matrixWorld))
+          );
           instanced.instanceMatrix.needsUpdate = true;
           instanced.computeBoundingSphere();
           instanced.computeBoundingBox();
@@ -89,7 +91,9 @@ export function buildMap(
     }
   }
 
-  const done = Promise.all(Array.from({ length: Math.min(concurrency, data.models.length) }, worker)).then(() => undefined);
+  const done = Promise.all(Array.from({ length: Math.min(concurrency, data.models.length) }, worker)).then(
+    () => undefined
+  );
   return {
     group,
     done,

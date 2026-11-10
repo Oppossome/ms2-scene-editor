@@ -3,7 +3,8 @@ import type { ClipInfo } from '../../types';
 import { filterClips, formatDuration, groupClips, groupOf } from './clips';
 
 const clip = (name: string, duration = 1): ClipInfo => ({ name, duration });
-const many = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => clip(`${prefix}_${String(i).padStart(2, '0')}`));
+const many = (prefix: string, n: number) =>
+  Array.from({ length: n }, (_, i) => clip(`${prefix}_${String(i).padStart(2, '0')}`));
 
 describe('groupClips', () => {
   it('keeps short lists flat and an empty list empty', () => {
