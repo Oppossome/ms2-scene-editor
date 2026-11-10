@@ -358,8 +358,8 @@ export class SceneRuntime {
 
   // ----- picking ---------------------------------------------------------------------------------------------
 
-  /** The node under a point (normalised device coordinates). `top` returns the root ancestor instead. */
-  pick(ndc: Vector2, camera: Camera, top = false): string | null {
+  /** The node under a point (normalised device coordinates). `top` returns its root; `allowLocked` bypasses hierarchy locks. */
+  pick(ndc: Vector2, camera: Camera, top = false, allowLocked = false): string | null {
     this.raycaster.setFromCamera(ndc, camera);
     for (const hit of this.raycaster.intersectObject(this.root, true)) {
       if (!this.visibleChain(hit.object)) continue;
@@ -370,10 +370,21 @@ export class SceneRuntime {
         object = object.parent;
       }
       const entity = id ? this.byId.get(id) : undefined;
-      if (!id || !entity || entity.locked || !this.visibleEntity(entity)) continue;
+      if (!id || !entity || !this.visibleEntity(entity) || (!allowLocked && this.lockedEntity(entity))) continue;
       return top ? (rootOf(this.nodes, id)?.id ?? id) : id;
     }
     return null;
+  }
+
+  private lockedEntity(entity: Entity): boolean {
+    for (
+      let current: Entity | undefined = entity;
+      current;
+      current = current.parentId ? this.byId.get(current.parentId) : undefined
+    ) {
+      if (current.locked) return true;
+    }
+    return false;
   }
 
   private visibleChain(object: Object3D | null) {

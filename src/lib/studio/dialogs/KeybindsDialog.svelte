@@ -30,7 +30,9 @@
         { action: 'Move', keys: [['G']] },
         { action: 'Rotate', keys: [['R']] },
         { action: 'Scale', keys: [['T']] },
-        { action: 'Focus selection', keys: [['F']] }
+        { action: 'Focus selection', keys: [['F']] },
+        { action: 'Select top-level ancestor', keys: [['Alt', 'Click']] },
+        { action: 'Select through hierarchy locks', keys: [['Ctrl', 'Click']] }
       ]
     },
     {

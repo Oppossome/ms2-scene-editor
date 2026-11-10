@@ -34,9 +34,9 @@
       if (!start || start.button !== e.button) return;
       if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
       if (e.button === 0) {
-        if (!blocked()) onpick(runtime.pick(toNdc(e), camera.current, e.altKey));
+        if (!blocked()) onpick(runtime.pick(toNdc(e), camera.current, e.altKey, e.ctrlKey));
       } else if (e.button === 2) {
-        oncontext(runtime.pick(toNdc(e), camera.current), e.clientX, e.clientY);
+        oncontext(runtime.pick(toNdc(e), camera.current, false, e.ctrlKey), e.clientX, e.clientY);
       }
     };
     const onContext = (e: Event) => e.preventDefault();
