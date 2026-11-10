@@ -32,7 +32,13 @@ const item = (over: Partial<ItemRecord>): ItemRecord => ({
 });
 
 const items = [
-  item({ id: '3', name: 'Red Hat', cls: 'hat', slots: ['CP'] }),
+  item({
+    id: '3',
+    name: 'Red Hat',
+    cls: 'hat',
+    slots: ['CP'],
+    assets: [{ ...item({}).assets[0], slot: 'CP', glb: 'hat.glb' }]
+  }),
   item({ id: '1', name: 'Blue Coat' }),
   item({
     id: '2',
@@ -76,6 +82,65 @@ describe('searchItems', () => {
     const page = searchItems(items, { limit: 1, offset: 1 });
     expect(page.total).toBe(3);
     expect(page.items).toHaveLength(1);
+  });
+
+  it('deduplicates items by their model set and prefers the classified record', () => {
+    const duplicate = item({ id: '0', name: 'Blue Coat variant', cls: '' });
+    const page = searchItems([...items, duplicate], { limit: 10 });
+    expect(page.total).toBe(3);
+    expect(page.items.map((i) => i.id)).toEqual(['1', '2', '3']);
+  });
+
+  it('keeps items that use different models', () => {
+    const differentAsset = item({
+      id: '4',
+      name: 'Blue Coat',
+      assets: [
+        {
+          ...items[1].assets[0],
+          glb: 'different.glb'
+        }
+      ]
+    });
+    const page = searchItems([...items, differentAsset], { q: 'Blue Coat', limit: 10 });
+    expect(page.total).toBe(2);
+    expect(page.items.map((i) => i.id)).toEqual(['1', '4']);
+  });
+
+  it('deduplicates matching models while preserving search for a different variant name', () => {
+    const duplicate = item({
+      id: '0',
+      name: 'Archer Vicious Reverse Armor (Lv. 50)',
+      cls: '',
+      type: 1,
+      subtype: 0,
+      category: 'CL'
+    });
+    const original = item({
+      id: '1',
+      name: 'Archer Vicious Reverse Armor (Lv. 50)',
+      cls: 'coat',
+      type: 1,
+      subtype: 16,
+      category: 'CL'
+    });
+    const nextLevel = item({
+      id: '2',
+      name: 'Archer Vicious Reverse Armor (Lv. 56)',
+      cls: 'coat',
+      type: 1,
+      subtype: 16,
+      category: 'CL'
+    });
+
+    const page = searchItems([duplicate, original, nextLevel], { q: 'Archer Vicious Reverse Armor', limit: 10 });
+    expect(page.total).toBe(1);
+    expect(page.items.map((entry) => [entry.id, entry.name, entry.cls])).toEqual([
+      ['1', 'Archer Vicious Reverse Armor (Lv. 50)', 'coat']
+    ]);
+
+    const exactVariant = searchItems([original, nextLevel], { q: 'Archer Vicious Reverse Armor Lv. 56', limit: 10 });
+    expect(exactVariant.items.map((entry) => entry.id)).toEqual(['2']);
   });
 });
 

@@ -44,10 +44,18 @@ export function searchItems(items: ItemRecord[], query: ItemQuery): Page<ItemRec
     }
     return true;
   });
+  matched.sort((a, b) => Number(!a.cls) - Number(!b.cls) || a.id.localeCompare(b.id));
+  const seen = new Set<string>();
+  const deduplicated = matched.filter((item) => {
+    const key = JSON.stringify([...new Set(item.assets.map((asset) => asset.glb.toLowerCase()))].sort());
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   // Items whose name is just their id (no entry in the string table) go last.
   const named = (i: ItemRecord) => (i.name === i.id ? 1 : 0);
-  matched.sort((a, b) => named(a) - named(b) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-  return paginate(matched, query.offset ?? 0, query.limit ?? 60);
+  deduplicated.sort((a, b) => named(a) - named(b) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return paginate(deduplicated, query.offset ?? 0, query.limit ?? 60);
 }
 
 export function searchByName<T extends { id: string; name: string }>(

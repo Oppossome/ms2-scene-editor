@@ -13,7 +13,7 @@ export const GET: RequestHandler = ({ params, request }) => {
   const headers: Record<string, string> = {
     'Content-Type': contentTypeFor(file),
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'public, max-age=3600',
+    'Cache-Control': 'public, max-age=604800',
     ETag: etag
   };
 
