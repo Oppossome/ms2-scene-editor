@@ -1,21 +1,18 @@
 import { untrack } from 'svelte';
-import {
-  DEFAULT_EYE,
-  DEFAULT_SKIN,
-  History,
-  ONE,
-  SCENE_KEY,
-  ZERO,
-  canHaveChildren,
-  type Vec3
-} from './model.js';
-import type { ChannelIndexes } from '../character/tint.js';
-import type { FaceExpression } from '../character/expressions.js';
+import { DEFAULT_EYE, DEFAULT_SKIN } from '../entities/character/appearance.js';
+import { History } from './history.js';
+import { ONE, ZERO, canHaveChildren, type Vec3 } from '../entities/constants.js';
+import { SCENE_KEY } from './document.js';
+import type { ChannelIndexes } from '../entities/character/tint.js';
+import type { FaceExpression } from '../entities/character/expressions.js';
 import type { MapEnvironment } from '../types.js';
 import { canParent, cloneSubtree, deleteSubtree, uniqueName } from './tree.js';
-import { CharacterEntity, ItemEntity, restoreEntity, type Entity, type EntityInput, type EntityType } from './entity.svelte.js';
-import type { RegisteredProperty } from './property.svelte.js';
-import { omitUndefined } from './schemas.js';
+import { CharacterEntity } from '../entities/character/character.svelte.js';
+import { ItemEntity } from '../entities/character/item.svelte.js';
+import { restoreEntity } from '../entities/registry.js';
+import type { Entity, EntityInput, EntityType } from '../entities/types.js';
+import type { RegisteredProperty } from '../entities/property.svelte.js';
+import { omitUndefined } from '../entities/validation.js';
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 export type GizmoSpace = 'local' | 'world';

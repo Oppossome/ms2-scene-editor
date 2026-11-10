@@ -1,18 +1,22 @@
-import { getItem } from '../character/build.js';
+import { getItem } from '../entities/character/build.js';
 import { downloadBuffer, safeFilename } from '../export/glb.js';
 import { composeMap, expandLegacyMaps, fetchMap } from '../maps/entities.js';
-import type { ViewApi } from '../components/viewapi.js';
-import { defaultInsertParent, itemTargetCharacter } from '../scene/insert.js';
-import { DEFAULT_EYE, DEFAULT_SKIN, SCENE_KEY, type Vec3 } from '../scene/model.js';
-import { parseSceneJson } from '../scene/document.js';
-import { restoreEntity, CharacterEntity, GroupEntity, RiggedModel } from '../scene/entity.svelte.js';
+import type { ViewApi } from './viewport/viewapi.js';
+import { defaultInsertParent, itemTargetCharacter } from './toolbox/insert.js';
+import { DEFAULT_EYE, DEFAULT_SKIN } from '../entities/character/appearance.js';
+import { SCENE_KEY, parseSceneJson } from '../scene/document.js';
+import type { Vec3 } from '../entities/constants.js';
+import { restoreEntity } from '../entities/registry.js';
+import { CharacterEntity } from '../entities/character/character.svelte.js';
+import { GroupEntity } from '../entities/group.svelte.js';
+import { RiggedModel } from '../entities/rigged-model.svelte.js';
 import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState, type NewItem } from '../scene/store.svelte.js';
-import { saveNamed, type OutfitSnapshot } from '../stores/outfits.js';
-import type { ChannelIndexes } from '../character/tint.js';
+import { saveNamed, type OutfitSnapshot } from '../entities/character/outfits.js';
+import type { ChannelIndexes } from '../entities/character/tint.js';
 import type { ItemRecord, MapEnvironment } from '../types.js';
-import { DEFAULT_VIEW, resolveEnvironment, type ViewSettings } from '../scene/environment.js';
-import { lastFrame, stepFrame } from '../scene/properties.js';
+import { DEFAULT_VIEW, resolveEnvironment, type ViewSettings } from './viewport/view-settings.js';
+import { lastFrame, stepFrame } from '../assets/frames.js';
 import { pathOf } from '../scene/tree.js';
 
 /** Frame steps closer together than this belong to one undo step. */

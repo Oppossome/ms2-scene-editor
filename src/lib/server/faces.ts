@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { XMLParser } from 'fast-xml-parser';
-import { FACE_EXPRESSIONS, type FaceAnimations, type FaceFrame, type FaceSequence } from '../character/expressions.js';
+import { FACE_EXPRESSIONS, type FaceAnimations, type FaceFrame, type FaceSequence } from '../entities/character/expressions.js';
 import { EXTRACTED_ROOT, resolveAssetPath } from './assets.js';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', isArray: (name) => name === 'emotion' || name === 'texture' || name === 'anim' });

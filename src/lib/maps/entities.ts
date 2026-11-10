@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { entityMatrix } from './instancing.js';
-import { newId, type Vec3 } from '../scene/model.js';
-import { restoreEntity, type Entity, type GroupEntity } from '../scene/entity.svelte.js';
+import { newId, type Vec3 } from '../entities/constants.js';
+import { restoreEntity } from '../entities/registry.js';
+import type { Entity } from '../entities/types.js';
+import type { GroupEntity } from '../entities/group.svelte.js';
 import type { SceneDocument } from '../scene/document.js';
-import { environmentSchema, finite } from '../scene/schemas.js';
+import { environmentSchema } from './environment.js';
+import { finite } from '../entities/validation.js';
 import type { MapData } from '../types.js';
 
 const mapSchema = z

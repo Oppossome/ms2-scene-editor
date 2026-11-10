@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SceneState } from './store.svelte';
+import { SceneState } from './store.svelte.js';
 import { entity, loadJson } from './testing';
 
 // Entities of every type, read by property name.

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CharacterEntity } from '../scene/entity.svelte';
-import { SceneState } from '../scene/store.svelte';
-import { Studio } from './controller.svelte';
+import type { CharacterEntity } from '../entities/character/character.svelte.js';
+import { SceneState } from '../scene/store.svelte.js';
+import { Studio } from './controller.svelte.js';
 
 /** Just what the frame methods use of a Studio: the scene, a runtime with clips, and the step timer. */
 function setup(frameNow = 0) {

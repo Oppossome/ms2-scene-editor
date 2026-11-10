@@ -1,5 +1,5 @@
 import { CanvasTexture, SRGBColorSpace, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
-import { getTintInfo, tintPixel, type MaskPixel } from '../character/tint.js';
+import { getTintInfo, tintPixel, type MaskPixel } from '../entities/character/tint.js';
 
 const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const toSrgb = (c: number) => {

@@ -1,5 +1,6 @@
 import { parseSceneJson } from './document.js';
-import { restoreEntity, type Entity, type EntityType } from './entity.svelte.js';
+import { restoreEntity } from '../entities/registry.js';
+import type { Entity, EntityType } from '../entities/types.js';
 import type { SceneState } from './store.svelte.js';
 
 const required: Record<EntityType, Record<string, unknown>> = {

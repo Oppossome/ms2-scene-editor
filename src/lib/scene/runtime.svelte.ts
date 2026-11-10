@@ -5,15 +5,21 @@ import {
 import { untrack } from 'svelte';
 import type { AnimationPlayer } from '../assets/animation.js';
 import { instantiate } from '../assets/loader.js';
-import type { CharacterRig, BoneInfo } from '../character/rig.js';
+import type { CharacterRig, BoneInfo } from '../entities/character/rig.js';
 import { exportGlb } from '../export/glb.js';
 import { EntityBatches, InstanceTarget } from '../maps/entity-batches.js';
 import type { ClipInfo, MapEnvironment } from '../types.js';
-import { FRAME_RATE } from './model.js';
+import { FRAME_RATE } from '../assets/frames.js';
 import type { LocalTransform } from './store.svelte.js';
 import { descendantsOf, flatten, rootOf } from './tree.js';
-import { CharacterEntity, GroupEntity, ItemEntity, LightingEntity, PropEntity, RiggedModel, type Entity } from './entity.svelte.js';
-import type { RenderContext } from './render-context.js';
+import { CharacterEntity } from '../entities/character/character.svelte.js';
+import { GroupEntity } from '../entities/group.svelte.js';
+import { ItemEntity } from '../entities/character/item.svelte.js';
+import { LightingEntity } from '../entities/lighting.svelte.js';
+import { PropEntity } from '../entities/prop.svelte.js';
+import { RiggedModel } from '../entities/rigged-model.svelte.js';
+import type { Entity } from '../entities/types.js';
+import type { RenderContext } from '../entities/render-context.js';
 
 /** World-space box around the visible meshes under `roots`; shared-batch props contribute their own bounds. */
 function visibleBounds(roots: Object3D[]): Box3 {

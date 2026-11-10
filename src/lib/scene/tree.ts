@@ -1,5 +1,6 @@
-import { canHaveChildren, newId } from './model.js';
-import { restoreEntity, type Entity } from './entity.svelte.js';
+import { canHaveChildren, newId } from '../entities/constants.js';
+import { restoreEntity } from '../entities/registry.js';
+import type { Entity } from '../entities/types.js';
 
 const childrenOf = (nodes: Entity[], parentId: string | null) => nodes.filter((n) => n.parentId === parentId);
 

@@ -1,6 +1,18 @@
-import { canHaveChildren, newId } from './model.js';
-import { restoreEntity, type Entity, type GroupEntity } from './entity.svelte.js';
-import { issueText, sceneEnvelopeSchema } from './schemas.js';
+import { z } from 'zod';
+import { canHaveChildren, newId } from '../entities/constants.js';
+import { restoreEntity } from '../entities/registry.js';
+import type { Entity } from '../entities/types.js';
+import type { GroupEntity } from '../entities/group.svelte.js';
+import { issueText } from '../entities/validation.js';
+
+export const SCENE_KEY = 'ms2se.scene.current';
+
+/** Version 3 saves `entities` tagged with `type`; versions 1 and 2 saved `nodes` tagged with `kind`. */
+const sceneEnvelopeSchema = z.object({
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  nodes: z.array(z.unknown()).optional(),
+  entities: z.array(z.unknown()).optional()
+});
 
 export interface SceneDocument {
   entities: Entity[];

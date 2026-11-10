@@ -1,20 +1,20 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
-  import Viewport from '#lib/components/Viewport.svelte';
+  import Viewport from '#lib/studio/viewport/Viewport.svelte';
   import { pathOf } from '#lib/scene/tree.js';
-  import ContextMenu from '#lib/studio/ContextMenu.svelte';
+  import ContextMenu from '#lib/studio/menus/ContextMenu.svelte';
   import { Studio } from '#lib/studio/controller.svelte.js';
-  import Explorer from '#lib/studio/Explorer.svelte';
-  import AboutDialog from '#lib/studio/AboutDialog.svelte';
-  import KeybindsDialog from '#lib/studio/KeybindsDialog.svelte';
-  import ReportIssueDialog from '#lib/studio/ReportIssueDialog.svelte';
-  import BackgroundPicker from '#lib/studio/BackgroundPicker.svelte';
-  import MenuBar from '#lib/studio/MenuBar.svelte';
-  import { parseView } from '#lib/scene/environment.js';
-  import Properties from '#lib/studio/Properties.svelte';
-  import Splitter from '#lib/studio/Splitter.svelte';
-  import StudioScene from '#lib/studio/StudioScene.svelte';
-  import Toolbox from '#lib/studio/Toolbox.svelte';
+  import Explorer from '#lib/studio/explorer/Explorer.svelte';
+  import AboutDialog from '#lib/studio/dialogs/AboutDialog.svelte';
+  import KeybindsDialog from '#lib/studio/dialogs/KeybindsDialog.svelte';
+  import ReportIssueDialog from '#lib/studio/dialogs/ReportIssueDialog.svelte';
+  import BackgroundPicker from '#lib/studio/dialogs/BackgroundPicker.svelte';
+  import MenuBar from '#lib/studio/menus/MenuBar.svelte';
+  import { parseView } from '#lib/studio/viewport/view-settings.js';
+  import Properties from '#lib/studio/properties/Properties.svelte';
+  import Splitter from '#lib/studio/controls/Splitter.svelte';
+  import StudioScene from '#lib/studio/viewport/StudioScene.svelte';
+  import Toolbox from '#lib/studio/toolbox/Toolbox.svelte';
 
   const studio = new Studio();
   const store = studio.store;

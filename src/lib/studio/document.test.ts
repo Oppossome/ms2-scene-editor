@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Studio } from './controller.svelte.js';
-import { SCENE_KEY } from '../scene/model.js';
+import { SCENE_KEY } from '../scene/document.js';
 
 const map = {
   id: '1', name: 'Map', models: ['Map/a.glb'],

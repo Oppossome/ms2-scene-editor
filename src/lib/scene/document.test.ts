@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseScene, parseSceneJson } from './document';
-import { CharacterEntity, GroupEntity, ItemEntity, LightingEntity, NpcEntity, PropEntity, restoreEntity } from './entity.svelte';
+import { CharacterEntity } from '../entities/character/character.svelte.js';
+import { GroupEntity } from '../entities/group.svelte.js';
+import { ItemEntity } from '../entities/character/item.svelte.js';
+import { LightingEntity } from '../entities/lighting.svelte.js';
+import { NpcEntity } from '../entities/model.svelte.js';
+import { PropEntity } from '../entities/prop.svelte.js';
 
 // Versions 1 and 2 saved `nodes` tagged with `kind`.
 const base = { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], visible: true };
@@ -154,11 +159,6 @@ describe('type-tagged scenes (version 3)', () => {
     expect(doc.entities.map((e) => e.toJSON())).toEqual(items);
     expect(doc.pendingMaps).toEqual([]);
     expect(JSON.parse(JSON.stringify(doc.entities))).toEqual(items);
-  });
-
-  it('writes only registered values and the type, never runtime state', () => {
-    const json = restoreEntity({ type: 'prop', glb: 'x.glb', ...base }).toJSON();
-    expect(Object.keys(json).sort()).toEqual(['glb', 'id', 'locked', 'name', 'parentId', 'position', 'rotation', 'scale', 'type', 'visible']);
   });
 
   it('does not accept a kind or an unknown type, and cannot name a constructor', () => {

@@ -1,6 +1,6 @@
 import { Box3, Group, InstancedMesh, Matrix4, Mesh, type Intersection } from 'three';
 import { loadModel } from '../assets/loader.js';
-import type { PropEntity } from '../scene/entity.svelte.js';
+import type { PropEntity } from '../entities/prop.svelte.js';
 
 /** A gizmo target with local mesh bounds but no cloned render hierarchy. */
 export class InstanceTarget extends Group {
