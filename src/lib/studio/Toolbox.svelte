@@ -5,7 +5,6 @@
   import ItemBrowser from '#lib/components/ItemBrowser.svelte';
   import { deleteNamed, loadSaved, type OutfitSnapshot } from '#lib/stores/outfits.js';
   import type { ChannelIndexes } from '#lib/character/tint.js';
-  import { DEFAULT_EYE } from '#lib/scene/model.js';
   import { CHANNEL_LABELS, editableChannels, hasOwnColours, type PickChannel } from '#lib/scene/properties.js';
   import type { ItemRecord } from '#lib/types.js';
   import type { Studio } from './controller.svelte.js';
@@ -118,25 +117,12 @@
 
   const target = $derived(studio.itemTarget);
   const itemTargetGender = $derived((target?.gender ?? itemGender) as 0 | 1);
-  const worn = $derived(
-    new Set(store.nodes.filter((n) => n.parentId === target?.id && n.kind === 'item' && n.itemId).map((n) => n.itemId!))
-  );
+  const worn = $derived(new Set(target ? store.itemsOf(target.id).map((n) => n.itemId) : []));
   const item = $derived(tab === 'items' ? (selected as ItemRecord | null) : null);
   // The character the item is tried on: what it wears now, as a string so unrelated scene edits do not reload the preview.
   const baseKey = $derived(
     target
-      ? JSON.stringify({
-          skin: target.skin ?? 2,
-          eye: target.eye ?? DEFAULT_EYE,
-          expression: target.expression,
-          items: store.nodes
-            .filter((n) => n.parentId === target.id && n.kind === 'item' && n.itemId)
-            .map((n) => ({
-              id: n.itemId!,
-              ...(n.color !== undefined ? { color: n.color } : {}),
-              ...(n.channelColors ? { channels: n.channelColors } : {})
-            }))
-        })
+      ? (({ skin, eye, expression, items }) => JSON.stringify({ skin, eye, expression, items }))(target.captureOutfit(store.itemsOf(target.id)))
       : ''
   );
   const into = $derived(
@@ -214,7 +200,7 @@
         id = studio.insertModel(s as ModelEntry, tab === 'props' ? 'prop' : 'npc');
         break;
       case 'maps':
-        id = studio.insertMap(s as MapEntry);
+        id = await studio.insertMap(s as MapEntry);
         break;
       case 'characters': {
         const o = s as OutfitEntry;

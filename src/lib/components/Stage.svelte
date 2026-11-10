@@ -45,10 +45,10 @@
   let camera = $state<PerspectiveCamera>();
   let controls = $state<OrbitControlsType>();
 
-  function frame(target: Object3D) {
+  function frame(target: Object3D | Box3) {
     if (!camera || !controls) return;
-    target.updateWorldMatrix(true, true);
-    const box = new Box3().setFromObject(target);
+    if (!(target instanceof Box3)) target.updateWorldMatrix(true, true);
+    const box = target instanceof Box3 ? target : new Box3().setFromObject(target);
     if (box.isEmpty()) return;
     const size = box.getSize(new Vector3());
     const center = box.getCenter(new Vector3());

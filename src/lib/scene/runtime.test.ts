@@ -1,19 +1,9 @@
 import { Box3, BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { SceneNode } from './model.js';
 import { SceneRuntime } from './runtime.svelte.js';
+import { entity } from './testing.js';
 
-const groupNode = (id: string, parentId: string | null): SceneNode => ({
-  id,
-  kind: 'group',
-  name: id,
-  parentId,
-  position: [0, 0, 0],
-  rotation: [0, 0, 0],
-  scale: [1, 1, 1],
-  visible: true,
-  locked: false
-});
+const groupNode = (id: string, parentId: string | null) => entity(id, 'group', parentId);
 
 describe('SceneRuntime group centering', () => {
   let runtime: SceneRuntime | undefined;

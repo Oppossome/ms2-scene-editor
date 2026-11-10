@@ -75,7 +75,6 @@ const item = (id: string, assets: ItemAsset[]): ItemRecord => ({
 });
 
 const hatA = item('1', [asset('CP', 'hat-a.glb')]);
-const hatB = item('2', [asset('CP', 'hat-b.glb')]);
 const hair = item('3', [asset('HR', 'hair.glb', { replace: true })]);
 const sword = item('4', [asset('RH', 'sword.glb', { targetnode: 'Bip01 R Hand' })]);
 

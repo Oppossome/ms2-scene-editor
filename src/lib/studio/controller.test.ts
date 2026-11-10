@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { CharacterEntity } from '../scene/entity.svelte';
 import { SceneState } from '../scene/store.svelte';
 import { Studio } from './controller.svelte';
 
@@ -17,7 +18,7 @@ function setup(frameNow = 0) {
     stepFrame: (delta: number) => Studio.prototype.stepFrame.call(studio, id, delta),
     holdFrame: (frame: number) => Studio.prototype.holdFrame.call(studio, id, frame)
   };
-  return { store, id, call, freeze: () => store.node(id)?.freeze, undoDepth: () => depth(store) };
+  return { store, id, call, freeze: () => (store.node(id) as CharacterEntity | undefined)?.freeze, undoDepth: () => depth(store) };
 }
 
 /** How many undo steps the frame edits made (adding the character is one step of its own). */
@@ -111,6 +112,6 @@ describe('Studio.stepFrame', () => {
       inBurst: Studio.prototype.inBurst
     };
     Studio.prototype.stepFrame.call(studio, id, 1);
-    expect(store.node(id)?.freeze).toBeUndefined();
+    expect((store.node(id) as CharacterEntity | undefined)?.freeze).toBeUndefined();
   });
 });

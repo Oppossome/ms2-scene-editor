@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { BoneInfo } from '#lib/character/rig.js';
-  import type { SceneNode } from '#lib/scene/model.js';
+  import type { Entity } from '#lib/scene/entity.svelte.js';
   import { ancestorsOf, canParent } from '#lib/scene/tree.js';
   import type { Studio } from './controller.svelte.js';
 
@@ -12,20 +12,23 @@
 
   type Zone = 'before' | 'into' | 'after';
   type Row =
-    | { type: 'node'; key: string; depth: number; node: SceneNode; expandable: boolean; open: boolean }
-    | { type: 'skeleton'; key: string; depth: number; character: SceneNode; open: boolean }
+    | { type: 'node'; key: string; depth: number; node: Entity; expandable: boolean; open: boolean }
+    | { type: 'skeleton'; key: string; depth: number; character: Entity; open: boolean }
     | { type: 'bone'; key: string; depth: number; characterId: string; bone: BoneInfo; open: boolean };
 
-  const BADGES: Record<SceneNode['kind'], string> = { group: 'G', prop: 'P', npc: 'N', character: 'C', item: 'I', map: 'M' };
+  const BADGES: Record<Entity['type'], string> = { group: 'G', prop: 'P', npc: 'N', character: 'C', item: 'I', lighting: 'L' };
 
   let filter = $state('');
   let list = $state<HTMLDivElement>();
+  const ROW_HEIGHT = 24;
+  let listHeight = $state(280);
+  let scrollTop = $state(0);
 
   const rows = $derived.by<Row[]>(() => {
     void runtime.version;
     const q = filter.trim().toLowerCase();
     const nodes = store.nodes;
-    const byParent = new Map<string | null, SceneNode[]>();
+    const byParent = new Map<string | null, Entity[]>();
     for (const n of nodes) {
       const l = byParent.get(n.parentId) ?? [];
       l.push(n);
@@ -38,7 +41,11 @@
       for (const n of nodes) {
         if (!n.name.toLowerCase().includes(q)) continue;
         keep.add(n.id);
-        for (const a of ancestorsOf(nodes, n.id)) keep.add(a.id);
+        let parent = store.byId.get(n.parentId ?? '');
+        while (parent) {
+          keep.add(parent.id);
+          parent = store.byId.get(parent.parentId ?? '');
+        }
       }
     }
     const out: Row[] = [];
@@ -54,7 +61,7 @@
       for (const node of byParent.get(parentId) ?? []) {
         if (keep && !keep.has(node.id)) continue;
         const kids = byParent.get(node.id) ?? [];
-        const isCharacter = node.kind === 'character';
+        const isCharacter = node.type === 'character';
         const open = keep ? true : !!store.expanded[node.id];
         out.push({ type: 'node', key: node.id, depth, node, expandable: kids.length > 0 || isCharacter, open });
         if (!open) continue;
@@ -70,13 +77,29 @@
     walk(null, 0);
     return out;
   });
+  const virtual = $derived(rows.length > 200);
+  const start = $derived(virtual ? Math.max(0, Math.min(Math.floor(scrollTop / ROW_HEIGHT) - 10, rows.length - Math.ceil(listHeight / ROW_HEIGHT) - 20)) : 0);
+  const end = $derived(virtual ? Math.min(rows.length, start + Math.ceil(listHeight / ROW_HEIGHT) + 20) : rows.length);
+  const shown = $derived(rows.slice(start, end));
 
   // Reveal the selected node: open its ancestors and scroll it into view.
   $effect(() => {
     const id = store.selectedId;
     if (!id) return;
     for (const a of ancestorsOf(store.nodes, id)) store.setExpanded(a.id, true);
-    void tick().then(() => list?.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' }));
+    void tick().then(async () => {
+      if (!list) return;
+      const index = rows.findIndex((row) => row.type === 'node' && row.node.id === id);
+      if (virtual && index >= 0) {
+        const top = index * ROW_HEIGHT;
+        if (top < list.scrollTop || top + ROW_HEIGHT > list.scrollTop + listHeight) {
+          list.scrollTop = Math.max(0, top - listHeight / 2);
+          scrollTop = list.scrollTop;
+          await tick();
+        }
+      }
+      list?.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' });
+    });
   });
 
   const isSelected = (row: Row) =>
@@ -185,8 +208,9 @@
     <input type="search" placeholder="Filter..." bind:value={filter} />
     <button title="Collapse all" onclick={() => (store.expanded = {})}>-</button>
   </div>
-  <div class="list" bind:this={list} role="tree">
-    {#each rows as row (row.key)}
+  <div class="list" bind:this={list} bind:clientHeight={listHeight} onscroll={(event) => { scrollTop = event.currentTarget.scrollTop; }} role="tree">
+    {#if start}<div class="spacer" style:height={`${start * ROW_HEIGHT}px`} aria-hidden="true"></div>{/if}
+    {#each shown as row (row.key)}
       {@const node = row.type === 'node' ? row.node : null}
       <div
         class="row {row.type}"
@@ -227,7 +251,7 @@
             tabindex="-1"
             aria-label="Expand">{row.open ? '▾' : '▸'}</button
           >
-          <span class="badge k-{row.node.kind}">{BADGES[row.node.kind]}</span>
+          <span class="badge k-{row.node.type}">{BADGES[row.node.type]}</span>
           {#if studio.renaming === row.node.id}
             <input
               class="rename"
@@ -287,6 +311,7 @@
     {:else}
       <p class="empty">{filter ? 'No matches.' : 'The scene is empty. Add things from the Toolbox, or right-click here.'}</p>
     {/each}
+    {#if end < rows.length}<div class="spacer" style:height={`${(rows.length - end) * ROW_HEIGHT}px`} aria-hidden="true"></div>{/if}
     <div
       class="rest"
       role="presentation"
@@ -339,6 +364,10 @@
   .rest {
     flex: 1;
     min-height: 24px;
+  }
+  .spacer {
+    flex: none;
+    pointer-events: none;
   }
   .row {
     display: flex;

@@ -3,29 +3,28 @@ import {
   DEFAULT_EYE,
   DEFAULT_SKIN,
   History,
-  newId,
   ONE,
-  parseSceneJson,
   SCENE_KEY,
   ZERO,
-  type NodeKind,
-  type SceneData,
-  type SceneNode,
+  canHaveChildren,
   type Vec3
 } from './model.js';
 import type { ChannelIndexes } from '../character/tint.js';
 import type { FaceExpression } from '../character/expressions.js';
-import { canParent, cloneSubtree, deleteSubtree, moveNode, uniqueName } from './tree.js';
+import type { MapEnvironment } from '../types.js';
+import { canParent, cloneSubtree, deleteSubtree, uniqueName } from './tree.js';
+import { CharacterEntity, ItemEntity, restoreEntity, type Entity, type EntityInput, type EntityType } from './entity.svelte.js';
+import type { RegisteredProperty } from './property.svelte.js';
+import { omitUndefined } from './schemas.js';
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 export type GizmoSpace = 'local' | 'world';
+const SCENE_VERSION = 3;
 
 export interface NewNode {
-  kind: NodeKind;
+  type: EntityType;
   name: string;
   parentId?: string | null;
-  /** Parent given as an index into the same `addMany` batch (the parent must come first). */
-  parentIndex?: number;
   attachBone?: string;
   beforeId?: string | null;
   glb?: string;
@@ -42,6 +41,8 @@ export interface NewNode {
   position?: Vec3;
   rotation?: Vec3;
   scale?: Vec3;
+  instanced?: boolean;
+  environment?: MapEnvironment;
 }
 
 export interface NewItem {
@@ -65,78 +66,102 @@ export interface BoneSelection {
   bone: string;
 }
 
-const toNode = (spec: NewNode, parentId: string | null): SceneNode => {
-  const node: SceneNode = {
-    id: newId(),
-    kind: spec.kind,
-    name: spec.name,
-    parentId,
-    position: spec.position ?? [...ZERO],
-    rotation: spec.rotation ?? [...ZERO],
-    scale: spec.scale ?? [...ONE],
-    visible: true,
-    locked: false
-  };
-  if (spec.attachBone) node.attachBone = spec.attachBone;
-  if (spec.glb) node.glb = spec.glb;
-  if (spec.mapId) node.mapId = spec.mapId;
-  if (spec.kind === 'character') {
-    node.gender = spec.gender ?? 1;
-    node.skin = spec.skin ?? DEFAULT_SKIN;
-    node.eye = spec.eye ?? DEFAULT_EYE;
-    if (spec.expression) node.expression = spec.expression;
-  }
-  if (spec.kind === 'item') {
-    node.itemId = spec.itemId;
-    node.slots = spec.slots ?? [];
-    if (spec.color !== undefined) node.color = spec.color;
-    if (spec.channelColors && Object.keys(spec.channelColors).length) node.channelColors = { ...spec.channelColors };
-  }
-  if (spec.clip) node.clip = spec.clip;
-  return node;
-};
+/** A new entity from a creation spec; the same validation as restoring a save applies. */
+function createEntity(spec: NewNode, parentId: string | null): Entity {
+  const { type, beforeId: _before, channelColors, ...rest } = spec;
+  return restoreEntity(
+    {
+      position: [...ZERO],
+      rotation: [...ZERO],
+      scale: [...ONE],
+      ...(type === 'character' ? { gender: 1, skin: DEFAULT_SKIN, eye: DEFAULT_EYE } : {}),
+      ...(type === 'item' ? { slots: [] } : {}),
+      ...omitUndefined({ ...rest, channelColors: channelColors && Object.keys(channelColors).length ? { ...channelColors } : undefined }),
+      type,
+      parentId
+    }
+  );
+}
+
+const itemSpec = (item: NewItem): NewNode => ({
+  type: 'item', name: item.name, itemId: item.itemId, slots: item.slots, color: item.color,
+  channelColors: item.channelColors, attachBone: item.attachBone
+});
 
 /** Where a new node may go within `list`: items need a character parent, nothing lives on an item. */
-function parentIn(list: SceneNode[], spec: NewNode): string | null | undefined {
+function parentIn(list: Entity[], spec: NewNode): string | null | undefined {
   const parentId = spec.parentId ?? null;
   const parent = parentId ? list.find((n) => n.id === parentId) : undefined;
-  if (spec.kind === 'item') return parent?.kind === 'character' ? parentId : undefined;
-  if (parentId && (!parent || parent.kind === 'item')) return null;
+  if (spec.type === 'item') return parent?.type === 'character' ? parentId : undefined;
+  if (parentId && (!parent || !canHaveChildren(parent.type))) return null;
   return parentId;
 }
 
-/** The scene being edited: the node tree, selection, undo/redo and persistence. */
+/** The scene being edited: the entity tree, selection, undo/redo and persistence. */
 export class SceneState {
-  nodes = $state.raw<SceneNode[]>([]);
+  private entities = $state.raw<Entity[]>([]);
+  /** Bumped on every change to the document (properties or structure): autosave and rendering follow it. */
+  revision = $state(0);
+  /** Entities to render again at the next sync (cleared by the renderer). */
+  changedIds = new Set<string>();
+  error = $state('');
+  private pendingSnapshot: string | null = null;
+  private gesture = false;
+  private transactionDepth = 0;
+
+  get nodes(): Entity[] {
+    return this.entities;
+  }
+
+  private set nodes(next: Entity[]) {
+    this.commit();
+    const before = new Set(this.entities);
+    const after = new Set(next);
+    for (const entity of next) if (!before.has(entity)) this.changedIds.add(entity.id);
+    // A character dresses itself from its children, so it renders again when one leaves.
+    for (const entity of this.entities) if (!after.has(entity) && entity.parentId) this.changedIds.add(entity.parentId);
+    this.entities = next;
+    this.revision++;
+  }
+
   selectedId = $state<string | null>(null);
   selectedBone = $state.raw<BoneSelection | null>(null);
   mode = $state<GizmoMode>('translate');
   space = $state<GizmoSpace>('world');
   snap = $state(false);
-  /** Explorer open state by key (node id, or `skel:<characterId>` / `bone:<characterId>:<name>`). */
+  /** Explorer open state by key (entity id, or `skel:<characterId>` / `bone:<characterId>:<name>`). */
   expanded = $state.raw<Record<string, boolean>>({});
 
-  /** Filled in by the renderer: the local transform a node needs to keep its world pose under a new parent. */
-  hooks: { localFor?: (id: string, parentId: string | null, bone?: string) => LocalTransform | null } = {};
+  hooks: {
+    /** Filled in by the renderer: the local transform a node needs to keep its world pose under a new parent. */
+    localFor?: (id: string, parentId: string | null, bone?: string) => LocalTransform | null;
+    /** Asynchronous document loads in flight are cancelled when the document changes under them. */
+    cancelLoad?: () => void;
+  } = {};
 
   private history = new History(100);
   /** Bumped on every history change so the UI can reflect canUndo/canRedo. */
   historyVersion = $state(0);
-  private indexCache: { nodes: SceneNode[]; map: Map<string, SceneNode> } | null = null;
+  private indexCache: { nodes: Entity[]; map: Map<string, Entity> } | null = null;
 
-  get byId(): Map<string, SceneNode> {
+  get byId(): Map<string, Entity> {
     if (this.indexCache?.nodes !== this.nodes) {
       this.indexCache = { nodes: this.nodes, map: new Map(this.nodes.map((n) => [n.id, n])) };
     }
     return this.indexCache.map;
   }
 
-  node(id: string | null | undefined): SceneNode | undefined {
+  node(id: string | null | undefined): Entity | undefined {
     return id ? this.byId.get(id) : undefined;
   }
 
-  get selected(): SceneNode | undefined {
+  get selected(): Entity | undefined {
     return this.node(this.selectedId);
+  }
+
+  /** The item entities a character wears, in sibling order. */
+  itemsOf(characterId: string): ItemEntity[] {
+    return this.nodes.filter((n): n is ItemEntity => n.type === 'item' && n.parentId === characterId);
   }
 
   get canUndo() {
@@ -149,13 +174,68 @@ export class SceneState {
     return this.history.canRedo;
   }
 
+  // ----- history ------------------------------------------------------------------------------------------
+
   /** Remember the current state so the next change can be undone. */
-  record() {
-    this.history.record(JSON.stringify(this.nodes));
-    untrack(() => this.historyVersion++);
+  private record() {
+    if (this.gesture) return;
+    this.pendingSnapshot ??= this.serializeNodes();
   }
 
-  private insert(list: SceneNode[], node: SceneNode, beforeId?: string | null): SceneNode[] {
+  private serializeNodes() {
+    return JSON.stringify(this.nodes);
+  }
+
+  private commit() {
+    if (this.pendingSnapshot !== null && !this.transactionDepth) {
+      this.history.record(this.pendingSnapshot);
+      this.pendingSnapshot = null;
+      untrack(() => this.historyVersion++);
+    }
+  }
+
+  /** A continuous edit (drag, scrub, typing): everything until `endGesture` is one undo step. */
+  beginGesture() {
+    this.endGesture();
+    this.record();
+    this.gesture = true;
+  }
+
+  endGesture() {
+    const active = this.gesture;
+    this.gesture = false;
+    if (active || !this.transactionDepth) this.pendingSnapshot = null;
+  }
+
+  /** Everything the action changes is one undo step, and none when it changes nothing. A failure rolls back. */
+  transaction(action: () => void) {
+    if (!this.transactionDepth) this.endGesture();
+    this.transactionDepth++;
+    try {
+      action();
+    } catch (error) {
+      const snapshot = this.pendingSnapshot;
+      this.pendingSnapshot = null;
+      if (snapshot !== null) {
+        this.nodes = this.restoreAll(snapshot);
+        this.fixSelection();
+      }
+      throw error;
+    } finally {
+      if (!--this.transactionDepth) {
+        if (this.pendingSnapshot !== null && this.serializeNodes() === this.pendingSnapshot) this.pendingSnapshot = null;
+        this.commit();
+      }
+    }
+  }
+
+  private restoreAll(text: string): Entity[] {
+    return (JSON.parse(text) as unknown[]).map((record) => restoreEntity(record));
+  }
+
+  // ----- adding and removing ------------------------------------------------------------------------------
+
+  private insert(list: Entity[], node: Entity, beforeId?: string | null): Entity[] {
     const at = beforeId ? list.findIndex((n) => n.id === beforeId) : -1;
     return at < 0 ? [...list, node] : [...list.slice(0, at), node, ...list.slice(at)];
   }
@@ -164,72 +244,47 @@ export class SceneState {
     const parentId = parentIn(this.nodes, spec);
     if (parentId === undefined) return '';
     this.record();
-    const node = toNode({ ...spec, name: uniqueName(this.nodes, parentId, spec.name) }, parentId);
-    if (node.attachBone && this.node(parentId)?.kind !== 'character') delete node.attachBone;
+    const bone = this.node(parentId)?.type === 'character' ? spec.attachBone : undefined;
+    const node = createEntity({ ...spec, attachBone: bone, name: uniqueName(this.nodes, parentId, spec.name) }, parentId);
     this.nodes = this.insert(this.nodes, node, spec.beforeId);
     if (select) this.select(node.id);
     if (parentId) this.setExpanded(parentId, true);
     return node.id;
   }
 
-  /** Add several nodes in one undo step (no selection change). Returns their ids. */
-  addMany(specs: NewNode[]): string[] {
+  /** Add already made entities (a map import) in one undo step. */
+  append(entities: Entity[]) {
+    if (!entities.length) return;
     this.record();
-    let list = this.nodes;
-    const ids: string[] = [];
-    for (const spec of specs) {
-      const parentRef = spec.parentIndex !== undefined ? (ids[spec.parentIndex] || null) : undefined;
-      const parentId = parentIn(list, parentRef !== undefined ? { ...spec, parentId: parentRef } : spec);
-      if (parentId === undefined) {
-        ids.push('');
-        continue;
-      }
-      const node = toNode(spec, parentId);
-      list = [...list, node];
-      ids.push(node.id);
-    }
-    this.nodes = list;
-    return ids;
+    this.nodes = [...this.nodes, ...entities];
   }
 
-  /** Wear an item: a child item node of the character. Items in the same slots (or the same item) are replaced. */
+  /** Wear an item: a child item of the character. Items in the same slots (or the same item) are replaced. */
   equipItem(characterId: string, item: NewItem, select = true): string {
-    const character = this.node(characterId);
-    if (!character || character.kind !== 'character') return '';
+    if (this.node(characterId)?.type !== 'character') return '';
     this.record();
-    const clash = (n: SceneNode) =>
-      n.parentId === characterId &&
-      n.kind === 'item' &&
-      (n.itemId === item.itemId || (n.slots ?? []).some((s) => item.slots.includes(s)));
-    const kept = this.nodes.filter((n) => !clash(n));
-    const node = toNode(
-      {
-        kind: 'item',
-        name: item.name,
-        itemId: item.itemId,
-        slots: item.slots,
-        color: item.color,
-        channelColors: item.channelColors,
-        attachBone: item.attachBone
-      },
-      characterId
-    );
+    const clash = (n: ItemEntity) => n.itemId === item.itemId || n.slots.some((s) => item.slots.includes(s));
+    const kept = this.nodes.filter((n) => !(n instanceof ItemEntity && n.parentId === characterId && clash(n)));
+    const node = createEntity(itemSpec(item), characterId);
     this.nodes = this.insert(kept, node);
     if (select) this.select(node.id);
     this.setExpanded(characterId, true);
     return node.id;
   }
 
-  /** Replace everything a character wears (one undo step). */
+  /** Replace everything a character wears (one undo step); nothing changes when it already wears exactly this. */
   setOutfit(characterId: string, items: NewItem[]) {
-    const character = this.node(characterId);
-    if (!character || character.kind !== 'character') return;
+    if (this.node(characterId)?.type !== 'character') return;
+    const current = this.itemsOf(characterId);
+    const same = (node: ItemEntity, item: NewItem) =>
+      node.itemId === item.itemId && node.name === item.name && node.color === item.color &&
+      JSON.stringify(node.slots) === JSON.stringify(item.slots) &&
+      JSON.stringify(node.channelColors) === JSON.stringify(item.channelColors) &&
+      !node.attachBone && [...node.position, ...node.rotation].every((v) => v === 0) && node.scale.every((v) => v === 1);
+    if (current.length === items.length && current.every((node, i) => same(node, items[i]))) return;
     this.record();
-    const kept = this.nodes.filter((n) => !(n.parentId === characterId && n.kind === 'item'));
-    const added = items.map((i) =>
-      toNode({ kind: 'item', name: i.name, itemId: i.itemId, slots: i.slots, color: i.color, channelColors: i.channelColors }, characterId)
-    );
-    this.nodes = [...kept, ...added];
+    const kept = this.nodes.filter((n) => !(n.type === 'item' && n.parentId === characterId));
+    this.nodes = [...kept, ...items.map((item) => createEntity({ ...itemSpec(item), attachBone: undefined }, characterId))];
     this.setExpanded(characterId, true);
   }
 
@@ -238,24 +293,14 @@ export class SceneState {
     spec: { name: string; gender: 0 | 1; skin?: number; eye?: number; expression?: FaceExpression; parentId?: string | null; position?: Vec3 },
     items: NewItem[] = []
   ): string {
-    const parentId = parentIn(this.nodes, { kind: 'character', name: spec.name, parentId: spec.parentId });
+    const parentId = parentIn(this.nodes, { type: 'character', name: spec.name, parentId: spec.parentId });
     if (parentId === undefined) return '';
     this.record();
-    const character = toNode(
-      {
-        kind: 'character',
-        name: uniqueName(this.nodes, parentId, spec.name),
-        gender: spec.gender,
-        skin: spec.skin,
-        eye: spec.eye,
-        expression: spec.expression,
-        position: spec.position
-      },
+    const character = createEntity(
+      { type: 'character', name: spec.name, gender: spec.gender, skin: spec.skin, eye: spec.eye, expression: spec.expression, position: spec.position },
       parentId
     );
-    const children = items.map((i) =>
-      toNode({ kind: 'item', name: i.name, itemId: i.itemId, slots: i.slots, color: i.color, channelColors: i.channelColors }, character.id)
-    );
+    const children = items.map((item) => createEntity({ ...itemSpec(item), attachBone: undefined }, character.id));
     this.nodes = [...this.nodes, character, ...children];
     this.select(character.id);
     this.setExpanded(character.id, true);
@@ -264,6 +309,7 @@ export class SceneState {
   }
 
   remove(id: string) {
+    this.hooks.cancelLoad?.();
     if (!this.node(id)) return;
     this.record();
     this.nodes = deleteSubtree(this.nodes, id);
@@ -273,38 +319,56 @@ export class SceneState {
   /** Copy a node with everything below it (not items: a character holds one of each). */
   duplicate(id: string): string | null {
     const src = this.node(id);
-    if (!src || src.kind === 'item') return null;
+    if (!src || src.type === 'item') return null;
     const copies = cloneSubtree(this.nodes, id);
     if (!copies.length) return null;
     this.record();
     const root = copies[0];
-    root.name = uniqueName(this.nodes, root.parentId, `${src.name} copy`);
-    root.position = [src.position[0] + 60, src.position[1], src.position[2] + 60];
+    root.set({ name: uniqueName(this.nodes, root.parentId, `${src.name} copy`), position: [src.position[0] + 60, src.position[1], src.position[2] + 60] });
     this.nodes = [...this.nodes, ...copies];
     this.select(root.id);
     return root.id;
   }
 
-  /** Change a node. Pass record=false for continuous edits (dragging) after a manual record(). */
-  update(id: string, patch: Partial<Omit<SceneNode, 'id'>>, record = true) {
-    if (!this.node(id)) return;
-    if (record) this.record();
-    this.nodes = this.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n));
+  // ----- editing ------------------------------------------------------------------------------------------
+
+  /** Change an entity; continuous edits (dragging) call `beginGesture()` first and pass record=false. */
+  update(id: string, values: EntityInput, record = true) {
+    this.updateMany([{ id, values }], record);
+  }
+
+  /** Validate every change before applying any of them. */
+  updateMany(updates: { id: string; values: EntityInput }[], record = true) {
+    try {
+      const prepared: { entity: Entity; values: Map<RegisteredProperty, unknown> }[] = [];
+      for (const { id, values } of updates) {
+        const entity = this.node(id);
+        if (!entity) continue;
+        if ('type' in values || 'id' in values) throw new Error('An entity keeps its type and id');
+        if ('parentId' in values) throw new Error('Use reparent to change the hierarchy');
+        if (values.attachBone && this.node(entity.parentId)?.type !== 'character') throw new Error('A bone mount needs a character parent');
+        const changed = entity.prepare(values);
+        if (changed.size) prepared.push({ entity, values: changed });
+      }
+      if (!prepared.length) return;
+      if (record) this.record();
+      this.commit();
+      for (const { entity, values } of prepared) {
+        entity.apply(values);
+        this.changedIds.add(entity.id);
+        if (entity.parentId) this.changedIds.add(entity.parentId);
+      }
+      this.revision++;
+      this.error = '';
+    } catch (error) {
+      this.error = `Cannot edit scene: ${error instanceof Error ? error.message : error}`;
+      console.warn(this.error);
+    }
   }
 
   /** Update several node positions in one undo step. */
   updatePositions(updates: { id: string; position: Vec3 }[]) {
-    const positions = new Map(updates.map(({ id, position }) => [id, position]));
-    const changed = this.nodes.some((node) => {
-      const position = positions.get(node.id);
-      return position && node.position.some((value, axis) => value !== position[axis]);
-    });
-    if (!changed) return;
-    this.record();
-    this.nodes = this.nodes.map((node) => {
-      const position = positions.get(node.id);
-      return position ? { ...node, position: [...position] as Vec3 } : node;
-    });
+    this.updateMany(updates.map(({ id, position }) => ({ id, values: { position } })));
   }
 
   rename(id: string, name: string) {
@@ -321,18 +385,24 @@ export class SceneState {
   reparent(id: string, parentId: string | null, options: { beforeId?: string | null; bone?: string } = {}): boolean {
     const node = this.node(id);
     if (!node || !canParent(this.nodes, id, parentId)) return false;
-    const parent = this.node(parentId);
-    const bone = parent?.kind === 'character' ? options.bone : undefined;
-    const local = node.kind === 'item' ? null : this.hooks.localFor?.(id, parentId, bone);
+    if (options.beforeId === id) return true;
+    const bone = this.node(parentId)?.type === 'character' ? options.bone : undefined;
+    const local = node.type === 'item' ? null : this.hooks.localFor?.(id, parentId, bone);
+    const rest = this.nodes.filter((entity) => entity !== node);
+    const at = options.beforeId ? rest.findIndex((entity) => entity.id === options.beforeId) : -1;
+    const next = at < 0 ? [...rest, node] : [...rest.slice(0, at), node, ...rest.slice(at)];
+    const prepared = node.prepare({
+      parentId,
+      attachBone: bone,
+      ...(node.type === 'item' ? { position: [...ZERO], rotation: [...ZERO], scale: [...ONE] } : local)
+    });
+    if (!prepared.size && next.every((entity, index) => this.nodes[index] === entity)) return true;
     this.record();
-    let next = moveNode(this.nodes, id, parentId, { beforeId: options.beforeId, bone });
-    if (node.kind === 'item') {
-      next = next.map((n) =>
-        n.id === id ? { ...n, position: [...ZERO] as Vec3, rotation: [...ZERO] as Vec3, scale: [...ONE] as Vec3 } : n
-      );
-    } else if (local) {
-      next = next.map((n) => (n.id === id ? { ...n, ...local } : n));
-    }
+    this.commit();
+    if (node.parentId) this.changedIds.add(node.parentId);
+    node.apply(prepared);
+    this.changedIds.add(id);
+    if (parentId) this.changedIds.add(parentId);
     this.nodes = next;
     if (parentId) this.setExpanded(parentId, true);
     return true;
@@ -341,26 +411,28 @@ export class SceneState {
   /** Wrap a node in a new group that takes its place. */
   group(id: string): string | null {
     const node = this.node(id);
-    if (!node || node.kind === 'item') return null;
+    if (!node || node.type === 'item') return null;
     this.record();
-    const group = toNode({ kind: 'group', name: uniqueName(this.nodes, node.parentId, 'Group') }, node.parentId);
-    if (node.attachBone) group.attachBone = node.attachBone;
-    this.nodes = this.insert(this.nodes, group, id).map((n) => {
-      if (n.id !== id) return n;
-      const { attachBone: _bone, ...rest } = n;
-      return { ...rest, parentId: group.id };
-    });
+    const group = createEntity({ type: 'group', name: uniqueName(this.nodes, node.parentId, 'Group'), attachBone: node.attachBone }, node.parentId);
+    this.commit();
+    node.link(group.id);
+    this.changedIds.add(id);
+    this.nodes = this.insert(this.nodes, group, id);
     this.select(group.id);
     this.setExpanded(group.id, true);
     return group.id;
   }
 
+  // ----- selection ----------------------------------------------------------------------------------------
+
   select(id: string | null) {
+    this.endGesture();
     this.selectedId = id;
     this.selectedBone = null;
   }
 
   selectBone(characterId: string, bone: string) {
+    this.endGesture();
     this.selectedId = null;
     this.selectedBone = { characterId, bone };
   }
@@ -374,7 +446,15 @@ export class SceneState {
     this.setExpanded(key, !this.expanded[key]);
   }
 
+  private fixSelection() {
+    if (this.selectedId && !this.node(this.selectedId)) this.selectedId = null;
+    if (this.selectedBone && this.node(this.selectedBone.characterId)?.type !== 'character') this.selectedBone = null;
+  }
+
+  // ----- undo, persistence --------------------------------------------------------------------------------
+
   clear() {
+    this.hooks.cancelLoad?.();
     if (this.nodes.length === 0) return;
     this.record();
     this.nodes = [];
@@ -382,58 +462,50 @@ export class SceneState {
   }
 
   undo() {
-    const prev = this.history.undo(JSON.stringify(this.nodes));
-    if (prev === null) return;
-    this.restoreSerialized(prev);
+    this.hooks.cancelLoad?.();
+    this.endGesture();
+    const prev = this.history.undo(this.serializeNodes());
+    if (prev !== null) this.restoreSerialized(prev);
   }
 
   redo() {
-    const next = this.history.redo(JSON.stringify(this.nodes));
-    if (next === null) return;
-    this.restoreSerialized(next);
+    this.hooks.cancelLoad?.();
+    this.endGesture();
+    const next = this.history.redo(this.serializeNodes());
+    if (next !== null) this.restoreSerialized(next);
   }
 
   private restoreSerialized(text: string) {
-    this.nodes = JSON.parse(text) as SceneNode[];
+    this.nodes = this.restoreAll(text);
     this.fixSelection();
     this.historyVersion++;
   }
 
-  private fixSelection() {
-    if (this.selectedId && !this.node(this.selectedId)) this.selectedId = null;
-    if (this.selectedBone && this.node(this.selectedBone.characterId)?.kind !== 'character') this.selectedBone = null;
+  /** The scene as JSON: a version and the entities, each tagged with its `type`. */
+  serialize(indent?: number): string {
+    return JSON.stringify({ version: SCENE_VERSION, entities: this.nodes }, null, indent);
   }
 
-  toData(): SceneData {
-    return { version: 1, nodes: JSON.parse(JSON.stringify(this.nodes)) as SceneNode[] };
-  }
-
-  /** Replace the scene with loaded data (undoable). */
-  load(data: SceneData) {
-    this.record();
-    this.nodes = data.nodes;
+  /** Replace the scene with restored entities (undoable unless this is the first document). */
+  load(entities: Entity[], record = true) {
+    this.endGesture();
+    if (record) this.record();
+    else {
+      this.history.clear();
+      this.historyVersion++;
+    }
+    this.nodes = entities;
     this.selectedId = null;
     this.selectedBone = null;
   }
 
-  loadJson(text: string): boolean {
-    const data = parseSceneJson(text);
-    if (!data) return false;
-    this.load(data);
-    return true;
-  }
-
   saveLocal(storage: Pick<Storage, 'setItem'>) {
-    storage.setItem(SCENE_KEY, JSON.stringify(this.toData()));
+    storage.setItem(SCENE_KEY, this.serialize());
   }
 
-  loadLocal(storage: Pick<Storage, 'getItem'>) {
-    const raw = storage.getItem(SCENE_KEY);
-    const data = raw ? parseSceneJson(raw) : null;
-    if (data) {
-      this.nodes = data.nodes;
-      this.history.clear();
-      this.historyVersion++;
-    }
+  /** The preset a character's look makes, to save as an outfit. */
+  outfitOf(characterId: string) {
+    const character = this.node(characterId);
+    return character instanceof CharacterEntity ? character.captureOutfit(this.itemsOf(characterId)) : null;
   }
 }

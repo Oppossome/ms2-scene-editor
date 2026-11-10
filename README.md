@@ -41,4 +41,8 @@ Then open http://localhost:3000. The first start builds the indexes into `/data`
 
 ## Documentation
 
+Maps insert as editable groups of props, with a **Lighting** child for the painted backdrop and distance fog. Select props directly to move, hide, delete or export them; compatible static props remain instanced. The first visible Lighting entity in tree order controls the scene environment, beneath the View menu overrides.
+
+Scene saves now use version 3 (each entity tagged with its `type`). Existing version-1 and 2 scenes and outfits still load; old maps are converted before the scene is replaced. Conversion requires the original map assets, and a failed conversion preserves the original autosave. Whole imported maps remain omitted from GLB export by default.
+
 [AGENTS.md](./AGENTS.md) has the detailed notes: how the app and the extraction pipeline work, the file layout, model format details and known gaps. It is written for contributors and coding agents.

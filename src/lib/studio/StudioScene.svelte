@@ -61,9 +61,12 @@
       scaleSnap={store.snap ? 0.1 : undefined}
       onmouseDown={() => {
         studio.gizmoActive = true;
-        store.record();
+        store.beginGesture();
       }}
-      onmouseUp={() => setTimeout(() => (studio.gizmoActive = false), 0)}
+      onmouseUp={() => {
+        store.endGesture();
+        setTimeout(() => (studio.gizmoActive = false), 0);
+      }}
       onobjectChange={syncSelected}
     />
   {/key}

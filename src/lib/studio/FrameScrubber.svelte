@@ -6,6 +6,7 @@
     max,
     live,
     onstart,
+    onend,
     onscrub,
     onresume
   }: {
@@ -17,6 +18,7 @@
     live: () => number;
     /** A drag begins: record the undo step. */
     onstart: () => void;
+    onend?: () => void;
     /** Hold the animation on a frame; `dragging` when the drag already recorded its undo step. */
     onscrub: (frame: number, dragging: boolean) => void;
     /** Let the animation play again from the held frame. */
@@ -52,8 +54,8 @@
       dragging = true;
       onstart();
     }}
-    onpointerup={() => (dragging = false)}
-    onpointercancel={() => (dragging = false)}
+    onpointerup={() => { dragging = false; onend?.(); }}
+    onpointercancel={() => { dragging = false; onend?.(); }}
     oninput={(e) => onscrub(e.currentTarget.valueAsNumber, dragging)}
   />
   <div class="info">

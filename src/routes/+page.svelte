@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import Viewport from '#lib/components/Viewport.svelte';
   import { pathOf } from '#lib/scene/tree.js';
   import ContextMenu from '#lib/studio/ContextMenu.svelte';
@@ -43,8 +43,7 @@
     } catch {
       // A damaged layout entry just means the defaults.
     }
-    store.loadLocal(localStorage);
-    ready = true;
+    void studio.restoreLocal(localStorage).then(() => { ready = true; });
   });
 
   onDestroy(() => studio.dispose());
@@ -56,14 +55,16 @@
 
   // Autosave on every change once the stored scene has been loaded.
   $effect(() => {
-    if (!ready) return;
-    void store.nodes;
-    store.saveLocal(localStorage);
+    if (!ready || studio.autosaveBlocked) return;
+    void store.revision;
+    untrack(() => store.saveLocal(localStorage));
   });
 
   // The three.js graph follows the node tree.
   $effect(() => {
-    runtime.sync(store.nodes);
+    void store.revision;
+    runtime.sync(store.nodes, store.changedIds);
+    store.changedIds.clear();
   });
 
   $effect(() => {

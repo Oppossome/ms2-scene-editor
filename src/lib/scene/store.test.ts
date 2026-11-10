@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { SceneState } from './store.svelte';
+import { entity, loadJson } from './testing';
+
+// Entities of every type, read by property name.
+type Any = Record<string, any>;
+const all = (s: SceneState) => s.nodes as unknown as Any[];
+const node = (s: SceneState, id: string) => s.node(id) as unknown as Any | undefined;
 
 const item = (id: string, slots: string[]) => ({ itemId: id, name: `item ${id}`, slots });
 
@@ -9,13 +15,13 @@ function sceneWithHero() {
   return { s, hero };
 }
 
-const names = (s: SceneState, parentId: string | null) => s.nodes.filter((n) => n.parentId === parentId).map((n) => n.name);
+const names = (s: SceneState, parentId: string | null) => all(s).filter((n) => n.parentId === parentId).map((n) => n.name);
 
 describe('SceneState add', () => {
   it('adds nodes with unique sibling names and selects them', () => {
     const s = new SceneState();
-    const a = s.add({ kind: 'group', name: 'Group' });
-    const b = s.add({ kind: 'group', name: 'Group' });
+    const a = s.add({ type: 'group', name: 'Group' });
+    const b = s.add({ type: 'group', name: 'Group' });
     expect(names(s, null)).toEqual(['Group', 'Group 2']);
     expect(s.selectedId).toBe(b);
     expect(a).not.toBe(b);
@@ -23,25 +29,21 @@ describe('SceneState add', () => {
 
   it('keeps items on characters only and nothing on items', () => {
     const { s, hero } = sceneWithHero();
-    const prop = s.add({ kind: 'prop', name: 'Crate', glb: 'a.glb' });
-    expect(s.add({ kind: 'item', name: 'x', itemId: '9', parentId: prop })).toBe('');
-    expect(s.add({ kind: 'item', name: 'x', itemId: '9' })).toBe('');
-    const hat = s.nodes.find((n) => n.itemId === '1')!;
-    const child = s.add({ kind: 'prop', name: 'Spark', glb: 'b.glb', parentId: hat.id });
-    expect(s.node(child)?.parentId).toBeNull();
-    expect(s.add({ kind: 'item', name: 'ok', itemId: '3', slots: ['GL'], parentId: hero })).not.toBe('');
+    const prop = s.add({ type: 'prop', name: 'Crate', glb: 'a.glb' });
+    expect(s.add({ type: 'item', name: 'x', itemId: '9', parentId: prop })).toBe('');
+    expect(s.add({ type: 'item', name: 'x', itemId: '9' })).toBe('');
+    const hat = all(s).find((n) => n.itemId === '1')!;
+    const child = s.add({ type: 'prop', name: 'Spark', glb: 'b.glb', parentId: hat.id });
+    expect(node(s, child)?.parentId).toBeNull();
+    expect(s.add({ type: 'item', name: 'ok', itemId: '3', slots: ['GL'], parentId: hero })).not.toBe('');
   });
 
-  it('addMany links a batch through parentIndex in one undo step', () => {
+  it('append adds ready-made entities in one undo step', () => {
     const s = new SceneState();
-    const ids = s.addMany([
-      { kind: 'group', name: 'G' },
-      { kind: 'prop', name: 'A', glb: 'a.glb', parentIndex: 0 },
-      { kind: 'prop', name: 'B', glb: 'b.glb', parentIndex: 0 }
-    ]);
-    expect(s.nodes.filter((n) => n.parentId === ids[0])).toHaveLength(2);
+    s.append([entity('g', 'group'), entity('a', 'prop', 'g'), entity('b', 'prop', 'g')]);
+    expect(all(s).filter((n) => n.parentId === 'g')).toHaveLength(2);
     s.undo();
-    expect(s.nodes).toHaveLength(0);
+    expect(all(s)).toHaveLength(0);
   });
 });
 
@@ -49,29 +51,29 @@ describe('SceneState equipItem', () => {
   it('replaces an item that takes the same slot, in one undo step', () => {
     const { s, hero } = sceneWithHero();
     s.equipItem(hero, item('5', ['CL']));
-    expect(s.nodes.filter((n) => n.parentId === hero).map((n) => n.itemId)).toEqual(['1', '5']);
+    expect(all(s).filter((n) => n.parentId === hero).map((n) => n.itemId)).toEqual(['1', '5']);
     s.undo();
-    expect(s.nodes.filter((n) => n.parentId === hero).map((n) => n.itemId)).toEqual(['1', '2']);
+    expect(all(s).filter((n) => n.parentId === hero).map((n) => n.itemId)).toEqual(['1', '2']);
   });
 
   it('replaces the same item (a colour change) instead of duplicating it', () => {
     const { s, hero } = sceneWithHero();
     s.equipItem(hero, { ...item('1', ['CP']), color: 4 });
-    const hats = s.nodes.filter((n) => n.itemId === '1');
+    const hats = all(s).filter((n) => n.itemId === '1');
     expect(hats).toHaveLength(1);
     expect(hats[0].color).toBe(4);
   });
 
   it('refuses non-characters', () => {
     const s = new SceneState();
-    const g = s.add({ kind: 'group', name: 'G' });
+    const g = s.add({ type: 'group', name: 'G' });
     expect(s.equipItem(g, item('1', ['CP']))).toBe('');
   });
 
   it('setOutfit replaces everything worn', () => {
     const { s, hero } = sceneWithHero();
     s.setOutfit(hero, [item('7', ['SH'])]);
-    expect(s.nodes.filter((n) => n.parentId === hero).map((n) => n.itemId)).toEqual(['7']);
+    expect(all(s).filter((n) => n.parentId === hero).map((n) => n.itemId)).toEqual(['7']);
   });
 });
 
@@ -80,8 +82,8 @@ describe('SceneState character eyes', () => {
     const s = new SceneState();
     const a = s.addCharacter({ name: 'A', gender: 1 });
     const b = s.addCharacter({ name: 'B', gender: 0, eye: 9 });
-    expect(s.node(a)?.eye).toBe(5);
-    expect(s.node(b)?.eye).toBe(9);
+    expect(node(s, a)?.eye).toBe(5);
+    expect(node(s, b)?.eye).toBe(9);
   });
 });
 
@@ -89,88 +91,88 @@ describe('SceneState per-channel colours', () => {
   it('stores picks on the item node and replaces them with the item', () => {
     const { s, hero } = sceneWithHero();
     s.equipItem(hero, { ...item('1', ['CP']), color: 2, channelColors: { ch0: 4, ch2: 7 } });
-    const hat = s.nodes.find((n) => n.itemId === '1')!;
+    const hat = all(s).find((n) => n.itemId === '1')!;
     expect(hat).toMatchObject({ color: 2, channelColors: { ch0: 4, ch2: 7 } });
     s.equipItem(hero, item('1', ['CP']));
-    expect(s.nodes.find((n) => n.itemId === '1')?.channelColors).toBeUndefined();
+    expect(all(s).find((n) => n.itemId === '1')?.channelColors).toBeUndefined();
   });
 
   it('leaves out empty picks and survives duplicating the character', () => {
     const { s, hero } = sceneWithHero();
     s.equipItem(hero, { ...item('9', ['GL']), channelColors: {} });
-    expect(s.nodes.find((n) => n.itemId === '9')?.channelColors).toBeUndefined();
+    expect(all(s).find((n) => n.itemId === '9')?.channelColors).toBeUndefined();
     s.equipItem(hero, { ...item('10', ['SH']), channelColors: { ch2: 3 } });
     const copy = s.duplicate(hero)!;
-    expect(s.nodes.find((n) => n.parentId === copy && n.itemId === '10')?.channelColors).toEqual({ ch2: 3 });
+    expect(all(s).find((n) => n.parentId === copy && n.itemId === '10')?.channelColors).toEqual({ ch2: 3 });
   });
 
   it('setOutfit and addCharacter carry the picks', () => {
     const s = new SceneState();
     const id = s.addCharacter({ name: 'A', gender: 1 }, [{ ...item('1', ['CP']), channelColors: { ch0: 1 } }]);
-    expect(s.nodes.find((n) => n.parentId === id)?.channelColors).toEqual({ ch0: 1 });
+    expect(all(s).find((n) => n.parentId === id)?.channelColors).toEqual({ ch0: 1 });
     s.setOutfit(id, [{ ...item('2', ['CL']), channelColors: { ch2: 2 } }]);
-    expect(s.nodes.find((n) => n.parentId === id)?.channelColors).toEqual({ ch2: 2 });
+    expect(all(s).find((n) => n.parentId === id)?.channelColors).toEqual({ ch2: 2 });
   });
 });
 
 describe('SceneState remove, duplicate, group', () => {
   it('removes a node with its subtree and fixes the selection', () => {
     const { s, hero } = sceneWithHero();
-    s.select(s.nodes.find((n) => n.itemId === '1')!.id);
+    s.select(all(s).find((n) => n.itemId === '1')!.id);
     s.remove(hero);
-    expect(s.nodes).toHaveLength(0);
+    expect(all(s)).toHaveLength(0);
     expect(s.selectedId).toBeNull();
   });
 
   it('duplicates a character with its items, but not a lone item', () => {
     const { s, hero } = sceneWithHero();
     const copy = s.duplicate(hero)!;
-    expect(s.nodes).toHaveLength(6);
-    expect(s.nodes.filter((n) => n.parentId === copy)).toHaveLength(2);
-    expect(s.duplicate(s.nodes.find((n) => n.itemId === '1')!.id)).toBeNull();
+    expect(all(s)).toHaveLength(6);
+    expect(all(s).filter((n) => n.parentId === copy)).toHaveLength(2);
+    expect(s.duplicate(all(s).find((n) => n.itemId === '1')!.id)).toBeNull();
   });
 
   it('groups a node in a new group that takes its place', () => {
     const s = new SceneState();
-    const a = s.add({ kind: 'prop', name: 'A', glb: 'a.glb' });
-    const b = s.add({ kind: 'prop', name: 'B', glb: 'b.glb' });
+    const a = s.add({ type: 'prop', name: 'A', glb: 'a.glb' });
+    const b = s.add({ type: 'prop', name: 'B', glb: 'b.glb' });
     const g = s.group(b)!;
-    expect(s.nodes.map((n) => n.id)).toEqual([a, g, b]);
-    expect(s.node(b)?.parentId).toBe(g);
+    expect(all(s).map((n) => n.id)).toEqual([a, g, b]);
+    expect(node(s, b)?.parentId).toBe(g);
     expect(s.selectedId).toBe(g);
-    expect(s.group(s.nodes.find((n) => n.kind === 'prop' && n.id === a)!.id)).not.toBeNull();
+    expect(s.group(all(s).find((n) => n.type === 'prop' && n.id === a)!.id)).not.toBeNull();
   });
 });
 
 describe('SceneState reparent', () => {
   it('moves a node, inserts before a sibling and applies the world-preserving transform', () => {
     const s = new SceneState();
-    const g = s.add({ kind: 'group', name: 'G' });
-    const a = s.add({ kind: 'prop', name: 'A', glb: 'a.glb', position: [5, 0, 0] });
-    const b = s.add({ kind: 'prop', name: 'B', glb: 'b.glb', parentId: g });
+    const g = s.add({ type: 'group', name: 'G' });
+    const a = s.add({ type: 'prop', name: 'A', glb: 'a.glb', position: [5, 0, 0] });
+    const b = s.add({ type: 'prop', name: 'B', glb: 'b.glb', parentId: g });
     s.hooks.localFor = (id, parentId) => ({ position: [id === a && parentId === g ? 1 : 0, 2, 3], rotation: [0, 0, 0], scale: [1, 1, 1] });
     expect(s.reparent(a, g, { beforeId: b })).toBe(true);
     expect(names(s, g)).toEqual(['A', 'B']);
-    expect(s.node(a)?.position).toEqual([1, 2, 3]);
+    expect(node(s, a)?.position).toEqual([1, 2, 3]);
   });
 
   it('mounts on a bone of a character and rejects forbidden moves', () => {
     const { s, hero } = sceneWithHero();
-    const prop = s.add({ kind: 'prop', name: 'Sword', glb: 's.glb' });
+    const prop = s.add({ type: 'prop', name: 'Sword', glb: 's.glb' });
     expect(s.reparent(prop, hero, { bone: 'Bip01_R_Hand' })).toBe(true);
-    expect(s.node(prop)).toMatchObject({ parentId: hero, attachBone: 'Bip01_R_Hand' });
+    expect(node(s, prop)).toMatchObject({ parentId: hero, attachBone: 'Bip01_R_Hand' });
     expect(s.reparent(hero, prop)).toBe(false); // the prop now lives below the hero
-    const hat = s.nodes.find((n) => n.itemId === '1')!;
+    const hat = all(s).find((n) => n.itemId === '1')!;
     expect(s.reparent(hat.id, null)).toBe(false);
   });
 
   it('resets an item offset when it moves to another character', () => {
     const { s, hero } = sceneWithHero();
     const other = s.addCharacter({ name: 'Other', gender: 0 });
-    const hat = s.nodes.find((n) => n.itemId === '1')!;
+    const hat = all(s).find((n) => n.itemId === '1')!;
     s.update(hat.id, { position: [4, 5, 6] });
     expect(s.reparent(hat.id, other)).toBe(true);
-    expect(s.node(hat.id)).toMatchObject({ parentId: other, position: [0, 0, 0] });
+    expect(node(s, hat.id)).toMatchObject({ parentId: other, position: [0, 0, 0] });
     expect(names(s, hero)).toEqual(['item 2']);
   });
 });
@@ -178,39 +180,39 @@ describe('SceneState reparent', () => {
 describe('SceneState updatePositions', () => {
   it('updates multiple nodes in one undo step', () => {
     const s = new SceneState();
-    const group = s.add({ kind: 'group', name: 'Group' });
-    const child = s.add({ kind: 'prop', name: 'Child', glb: 'child.glb', parentId: group });
+    const group = s.add({ type: 'group', name: 'Group' });
+    const child = s.add({ type: 'prop', name: 'Child', glb: 'child.glb', parentId: group });
     s.updatePositions([
       { id: group, position: [10, 20, 30] },
       { id: child, position: [-10, -20, -30] }
     ]);
 
-    expect(s.node(group)?.position).toEqual([10, 20, 30]);
-    expect(s.node(child)?.position).toEqual([-10, -20, -30]);
+    expect(node(s, group)?.position).toEqual([10, 20, 30]);
+    expect(node(s, child)?.position).toEqual([-10, -20, -30]);
     s.undo();
-    expect(s.node(group)?.position).toEqual([0, 0, 0]);
-    expect(s.node(child)?.position).toEqual([0, 0, 0]);
+    expect(node(s, group)?.position).toEqual([0, 0, 0]);
+    expect(node(s, child)?.position).toEqual([0, 0, 0]);
   });
 });
 
 describe('SceneState history and persistence', () => {
   it('undoes and redoes node changes', () => {
     const s = new SceneState();
-    const a = s.add({ kind: 'group', name: 'G' });
+    const a = s.add({ type: 'group', name: 'G' });
     s.update(a, { name: 'Renamed' });
-    expect(s.node(a)?.name).toBe('Renamed');
+    expect(node(s, a)?.name).toBe('Renamed');
     s.undo();
-    expect(s.node(a)?.name).toBe('G');
+    expect(node(s, a)?.name).toBe('G');
     s.redo();
-    expect(s.node(a)?.name).toBe('Renamed');
+    expect(node(s, a)?.name).toBe('Renamed');
     s.undo();
     s.undo();
-    expect(s.nodes).toHaveLength(0);
+    expect(all(s)).toHaveLength(0);
   });
 
   it('rename ignores blanks and unchanged names', () => {
     const s = new SceneState();
-    const a = s.add({ kind: 'group', name: 'G' });
+    const a = s.add({ type: 'group', name: 'G' });
     s.rename(a, '  ');
     s.rename(a, 'G');
     expect(s.canUndo).toBe(true);
@@ -218,19 +220,19 @@ describe('SceneState history and persistence', () => {
     expect(s.canUndo).toBe(false);
   });
 
-  it('round-trips through storage and JSON', () => {
+  it('round-trips through storage and JSON, saving each entity with its type', () => {
     const { s } = sceneWithHero();
     const store = new Map<string, string>();
     const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
     s.saveLocal(storage);
     const t = new SceneState();
-    t.loadLocal(storage);
-    expect(t.nodes).toEqual(s.nodes);
-    expect(t.canUndo).toBe(false);
+    expect(loadJson(t, storage.getItem('ms2se.scene.current')!)).toBe(true);
+    expect(JSON.stringify(t.nodes)).toEqual(JSON.stringify(s.nodes));
     const u = new SceneState();
-    expect(u.loadJson('nope')).toBe(false);
-    expect(u.loadJson(JSON.stringify(s.toData()))).toBe(true);
-    expect(u.nodes).toHaveLength(3);
+    expect(loadJson(u, 'nope')).toBe(false);
+    expect(loadJson(u, s.serialize())).toBe(true);
+    expect(all(u)).toHaveLength(3);
+    expect(JSON.parse(s.serialize())).toMatchObject({ version: 3, entities: [{ type: 'character' }, { type: 'item' }, { type: 'item' }] });
   });
 
   it('selecting a bone clears the node selection and back', () => {

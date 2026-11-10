@@ -7,6 +7,7 @@
     max,
     disabled = false,
     onstart,
+    onend,
     onchange
   }: {
     value: number;
@@ -17,6 +18,7 @@
     disabled?: boolean;
     /** Called once before an edit begins (typing or the start of a drag), e.g. to record undo history. */
     onstart?: () => void;
+    onend?: () => void;
     onchange: (value: number) => void;
   } = $props();
 
@@ -46,6 +48,7 @@
   }
 
   function up() {
+    if (drag?.moved) onend?.();
     drag = null;
   }
 </script>
@@ -66,6 +69,7 @@
       if (Number.isNaN(v)) return;
       onstart?.();
       onchange(clamp(v));
+      onend?.();
     }}
   />
 </label>

@@ -1,18 +1,19 @@
 import { getItem } from '../character/build.js';
 import { downloadBuffer, safeFilename } from '../export/glb.js';
-import { decomposeForScene, extractNearby } from '../maps/extract.js';
+import { composeMap, expandLegacyMaps, fetchMap } from '../maps/entities.js';
 import type { ViewApi } from '../components/viewapi.js';
 import { defaultInsertParent, itemTargetCharacter } from '../scene/insert.js';
-import { DEFAULT_EYE, DEFAULT_SKIN, nodesToOutfit, type Vec3 } from '../scene/model.js';
+import { DEFAULT_EYE, DEFAULT_SKIN, SCENE_KEY, type Vec3 } from '../scene/model.js';
+import { parseSceneJson } from '../scene/document.js';
+import { restoreEntity, CharacterEntity, GroupEntity, RiggedModel } from '../scene/entity.svelte.js';
 import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState, type NewItem } from '../scene/store.svelte.js';
 import { saveNamed, type OutfitSnapshot } from '../stores/outfits.js';
 import type { ChannelIndexes } from '../character/tint.js';
-import type { ItemRecord, MapData, MapEnvironment } from '../types.js';
+import type { ItemRecord, MapEnvironment } from '../types.js';
 import { DEFAULT_VIEW, resolveEnvironment, type ViewSettings } from '../scene/environment.js';
 import { lastFrame, stepFrame } from '../scene/properties.js';
 import { pathOf } from '../scene/tree.js';
-import { Vector3 } from 'three';
 
 /** Frame steps closer together than this belong to one undo step. */
 const STEP_BURST_MS = 800;
@@ -50,7 +51,6 @@ export interface ModelEntry {
 }
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
-const EXTRACT_LIMIT = 300;
 
 /**
  * The studio's document and UI state, and the actions that touch several parts of it (scene data, the three.js
@@ -64,6 +64,7 @@ export class Studio {
   menu = $state.raw<MenuState | null>(null);
   message = $state('');
   busy = $state('');
+  autosaveBlocked = $state(false);
   /** Node being renamed in the Explorer. */
   renaming = $state<string | null>(null);
   ready = $state(false);
@@ -100,7 +101,9 @@ export class Studio {
 
   constructor() {
     this.store.hooks.localFor = (id, parentId, bone) => this.runtime.localFor(id, parentId, bone);
+    this.store.hooks.cancelLoad = () => this.documentLoad?.abort();
     this.runtime.hooks.defaultClip = (id, clip) => this.store.update(id, { clip }, false);
+    this.runtime.hooks.error = (message) => { this.message = message; };
   }
 
   // ----- Toolbox inserts ---------------------------------------------------------------------------------------
@@ -140,25 +143,16 @@ export class Studio {
     return id;
   }
 
-  insertModel(entry: ModelEntry, kind: 'prop' | 'npc'): string {
+  insertModel(entry: ModelEntry, type: 'prop' | 'npc'): string {
     const parent = this.insertParentId;
     const bone = this.insertBone;
-    return this.inserted(this.addModel(entry, kind, { parentId: parent ?? undefined, bone }), parent, bone);
+    return this.inserted(this.addModel(entry, type, { parentId: parent ?? undefined, bone }), parent, bone);
   }
 
-  insertMap(entry: { id: string; name: string }): string {
+  async insertMap(entry: { id: string; name: string }): Promise<string> {
     const parent = this.insertParentId;
-    return this.inserted(this.addMap(entry, parent ?? undefined), parent);
-  }
-
-  insertGroup(): string {
-    const parent = this.insertParentId;
-    return this.inserted(this.addGroup(parent ?? undefined), parent);
-  }
-
-  insertBaseCharacter(gender: 0 | 1): string {
-    const parent = this.insertParentId;
-    return this.inserted(this.addBaseCharacter(gender, parent ?? undefined), parent);
+    const bone = this.insertBone;
+    return this.inserted(await this.addMap(entry, parent ?? undefined, bone), parent, bone);
   }
 
   async insertCharacter(name: string, snapshot: OutfitSnapshot): Promise<string> {
@@ -170,7 +164,10 @@ export class Studio {
   get itemTarget() {
     if (this.insertAtRoot) return null;
     const bone = this.store.selectedBone;
-    if (bone) return this.store.node(bone.characterId) ?? null;
+    if (bone) {
+      const character = this.store.node(bone.characterId);
+      return character instanceof CharacterEntity ? character : null;
+    }
     return itemTargetCharacter(this.store.nodes, this.store.selectedId);
   }
 
@@ -202,10 +199,10 @@ export class Studio {
     return [round((t?.x ?? 0) + dx), 0, round((t?.z ?? 0) + dz)];
   }
 
-  addModel(entry: ModelEntry, kind: 'prop' | 'npc', where: { parentId?: string; bone?: string } = {}): string {
+  addModel(entry: ModelEntry, type: 'prop' | 'npc', where: { parentId?: string; bone?: string } = {}): string {
     const s = entry.scale ?? 1;
     return this.store.add({
-      kind,
+      type,
       name: entry.name,
       glb: entry.glb,
       parentId: where.parentId,
@@ -215,12 +212,41 @@ export class Studio {
     });
   }
 
-  addMap(entry: { id: string; name: string }, parentId?: string): string {
-    return this.store.add({ kind: 'map', name: entry.name, mapId: entry.id, parentId });
+  private documentLoad: AbortController | null = null;
+
+  async addMap(entry: { id: string; name: string }, parentId?: string, attachBone?: string): Promise<string> {
+    this.documentLoad?.abort();
+    const request = this.documentLoad = new AbortController();
+    const revision = this.store.revision;
+    this.busy = 'map';
+    this.message = '';
+    try {
+      const data = await fetchMap(entry.id, request.signal);
+      if (request.signal.aborted || revision !== this.store.revision) {
+        this.message = 'Map insertion cancelled because the scene changed.';
+        return '';
+      }
+      const group = restoreEntity({
+        type: 'group', name: entry.name, parentId: parentId ?? null, attachBone, mapId: data.id,
+        position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1]
+      });
+      const id = group.id;
+      this.store.append([group, ...composeMap(group as GroupEntity, data)]);
+      this.store.select(id);
+      this.store.setExpanded(id, false);
+      this.message = `Added ${data.items.length} props${data.unresolved ? `; ${data.unresolved} nonrenderable/unresolved records omitted` : ''}.`;
+      return id;
+    } catch (error) {
+      if (!request.signal.aborted) this.message = `Could not load map: ${error instanceof Error ? error.message : error}`;
+      return '';
+    } finally { if (this.documentLoad === request) this.busy = ''; }
   }
 
   addGroup(parentId?: string): string {
-    return this.store.add({ kind: 'group', name: 'Group', parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() });
+    return this.store.add({ type: 'group', name: 'Group', parentId, position: parentId ? [0, 0, 0] : this.spawnPoint() });
+  }
+  addLighting(parentId?: string): string {
+    return this.store.add({ type: 'lighting', name: 'Lighting', parentId, environment: {} });
   }
 
   async outfitItems(snapshot: OutfitSnapshot): Promise<NewItem[]> {
@@ -253,13 +279,13 @@ export class Studio {
   /** Make a character wear a saved outfit (one undo step per change; gender, skin and eyes follow the outfit). */
   async applyOutfit(characterId: string, snapshot: OutfitSnapshot) {
     const character = this.store.node(characterId);
-    if (!character || character.kind !== 'character') return;
+    if (character?.type !== 'character') return;
     const items = await this.outfitItems(snapshot);
     const eye = snapshot.eye ?? DEFAULT_EYE;
-    if (character.gender !== snapshot.gender || character.skin !== snapshot.skin || (character.eye ?? DEFAULT_EYE) !== eye || character.expression !== snapshot.expression) {
+    this.store.transaction(() => {
       this.store.update(characterId, { gender: snapshot.gender, skin: snapshot.skin, eye, expression: snapshot.expression });
-    }
-    this.store.setOutfit(characterId, items);
+      this.store.setOutfit(characterId, items);
+    });
   }
 
   /** Wear an item: it becomes a child of the character (optionally mounted on a bone). */
@@ -275,47 +301,11 @@ export class Studio {
   }
 
   saveOutfit(characterId: string, name: string): boolean {
-    const snapshot = nodesToOutfit(this.store.nodes, characterId);
+    const snapshot = this.store.outfitOf(characterId);
     const trimmed = name.trim();
     if (!snapshot || !trimmed) return false;
     saveNamed(localStorage, trimmed, snapshot);
     return true;
-  }
-
-  /** Turn the props of a map around the camera target into individual nodes, grouped under a new group. */
-  async extractMapProps(mapNodeId: string, radius: number) {
-    const map = this.store.node(mapNodeId);
-    const toWorld = this.runtime.worldMatrixOf(mapNodeId);
-    if (!map || map.kind !== 'map' || !map.mapId || !toWorld) return;
-    this.busy = 'extract';
-    this.message = '';
-    try {
-      const res = await fetch(`/api/maps/${map.mapId}`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = (await res.json()) as MapData;
-      const target = this.view.target?.() ?? new Vector3();
-      const center = target.clone().applyMatrix4(toWorld.clone().invert());
-      const props = extractNearby(data, center, radius, EXTRACT_LIMIT);
-      if (props.length === 0) {
-        this.message = 'No props within that radius of the camera target.';
-        return;
-      }
-      const specs = [
-        { kind: 'group' as const, name: `${map.name} props` },
-        ...props.map((p) => {
-          const parts = decomposeForScene(toWorld.clone().multiply(p.matrix));
-          const name = p.glb.split('/').pop()!.replace(/\.glb$/i, '');
-          return { kind: 'prop' as const, name, glb: p.glb, parentIndex: 0, ...parts };
-        })
-      ];
-      const ids = this.store.addMany(specs);
-      if (ids[0]) this.store.select(ids[0]);
-      this.message = `Added ${props.length} props${props.length === EXTRACT_LIMIT ? ` (limited to the nearest ${EXTRACT_LIMIT})` : ''}.`;
-    } catch (e) {
-      this.message = `Could not extract props: ${e instanceof Error ? e.message : e}`;
-    } finally {
-      this.busy = '';
-    }
   }
 
   // ----- files -------------------------------------------------------------------------------------------------
@@ -339,7 +329,7 @@ export class Studio {
   }
 
   exportJson() {
-    const blob = new Blob([JSON.stringify(this.store.toData(), null, 2)], { type: 'application/json' });
+    const blob = new Blob([this.store.serialize(2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'scene.json';
@@ -348,7 +338,42 @@ export class Studio {
   }
 
   async importJson(file: File) {
-    this.message = this.store.loadJson(await file.text()) ? '' : 'That file is not a valid scene.';
+    await this.loadDocument(await file.text());
+  }
+
+  private async loadDocument(text: string, initial = false): Promise<boolean> {
+    if (initial) this.autosaveBlocked = true;
+    this.documentLoad?.abort();
+    const request = this.documentLoad = new AbortController();
+    const issues: string[] = [];
+    const parsed = parseSceneJson(text, issues);
+    if (!parsed) {
+      if (initial) this.autosaveBlocked = true;
+      this.message = `Cannot load scene: ${issues.join('; ')}`;
+      return false;
+    }
+    const revision = this.store.revision;
+    this.busy = 'scene';
+    try {
+      const entities = await expandLegacyMaps(parsed, request.signal);
+      if (request.signal.aborted || revision !== this.store.revision) {
+        this.message = 'Scene loading cancelled because the document changed.';
+        return false;
+      }
+      this.store.load(entities, !initial);
+      this.autosaveBlocked = false;
+      this.message = issues.length ? `Loaded with repairs: ${issues.join('; ')}` : '';
+      return true;
+    } catch (error) {
+      if (initial) this.autosaveBlocked = true;
+      if (!request.signal.aborted) this.message = `Cannot load scene; original save preserved: ${error instanceof Error ? error.message : error}`;
+      return false;
+    } finally { if (this.documentLoad === request) this.busy = ''; }
+  }
+
+  async restoreLocal(storage: Pick<Storage, 'getItem'>): Promise<boolean> {
+    const raw = storage.getItem(SCENE_KEY);
+    return raw ? this.loadDocument(raw, true) : true;
   }
 
   /** What the main viewport draws behind and around the scene: the View settings applied to the scene's map. */
@@ -364,6 +389,7 @@ export class Studio {
   setFrame(id: string, frame: number, record = true) {
     const node = this.store.node(id);
     if (!node) return;
+    if (!(node instanceof RiggedModel)) return;
     const last = lastFrame(this.runtime.clipsOf(id), node.clip);
     const next = Math.max(0, Math.round(last === undefined ? frame : Math.min(frame, last)));
     this.store.update(id, { freeze: next }, record);
@@ -376,7 +402,7 @@ export class Studio {
   stepFrame(id: string, delta: number) {
     const node = this.store.node(id);
     const clips = this.runtime.clipsOf(id);
-    if (!node || !clips.length) return;
+    if (!(node instanceof RiggedModel) || !clips.length) return;
     const frame = stepFrame(node.freeze ?? this.runtime.currentFrame(id), delta, lastFrame(clips, node.clip));
     this.setFrame(id, frame, !this.inBurst(id));
   }
@@ -397,7 +423,7 @@ export class Studio {
   // ----- view helpers --------------------------------------------------------------------------------------------
 
   focus(id: string | null) {
-    const target = id ? this.runtime.focusTarget(id) : undefined;
+    const target = id ? this.runtime.boundsOf(id) : undefined;
     if (target) this.view.frame?.(target);
   }
 
@@ -435,7 +461,7 @@ export class Studio {
     if (bone) this.store.selectBone(nodeId, bone);
     else this.store.select(nodeId);
     this.insertAtRoot = false;
-    const wearable = bone !== undefined || this.store.node(nodeId)?.kind === 'character';
+    const wearable = bone !== undefined || this.store.node(nodeId)?.type === 'character';
     if (wearable) this.toolboxTab = 'items';
     else if (this.toolboxTab === 'items') this.toolboxTab = 'props';
     this.openToolbox();
@@ -461,6 +487,7 @@ export class Studio {
     if (target.type === 'empty') {
       return [
         { label: 'Add Group', action: () => this.addGroup() },
+        { label: 'Add Lighting', action: () => this.addLighting() },
         { label: 'Add Female character', action: () => this.addBaseCharacter(1) },
         { label: 'Add Male character', action: () => this.addBaseCharacter(0) }
       ];
@@ -468,22 +495,23 @@ export class Studio {
     const node = store.node(target.id);
     if (!node) return [];
     const id = node.id;
-    const item = node.kind === 'item';
+    const item = node.type === 'item';
     return [
-      { label: 'Add Child...', action: () => this.addChild(id), disabled: item },
+      { label: 'Add Child...', action: () => this.addChild(id), disabled: item || node.type === 'lighting' },
       { label: 'Rename', action: () => (this.renaming = id) },
-      { label: 'Focus', action: () => this.focus(id) },
+      { label: 'Focus', action: () => this.focus(id), disabled: node.type === 'lighting' },
       { label: 'Duplicate', action: () => store.duplicate(id), disabled: item, separator: true },
       { label: 'Group', action: () => store.group(id), disabled: item },
       { label: 'Unparent', action: () => store.reparent(id, null), disabled: item || node.parentId === null },
       { label: node.visible ? 'Hide' : 'Show', action: () => this.toggleVisible(id), separator: true },
       { label: node.locked ? 'Unlock' : 'Lock', action: () => this.toggleLocked(id) },
-      { label: 'Export GLB', action: () => void this.exportGlb(id), disabled: item || node.kind === 'map' },
+      { label: 'Export GLB', action: () => void this.exportGlb(id), disabled: item || (node instanceof GroupEntity && !!node.mapId) || node.type === 'lighting' },
       { label: 'Delete', action: () => store.remove(id), danger: true, separator: true }
     ];
   }
 
   dispose() {
+    this.documentLoad?.abort();
     this.runtime.dispose();
   }
 }

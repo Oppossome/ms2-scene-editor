@@ -1,21 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { previewUrlForModel } from '../assets/urls';
-import type { SceneNode } from './model';
+import { entity as n } from './testing';
 import { defaultInsertParent, itemTargetCharacter } from './insert';
 
-const n = (id: string, kind: SceneNode['kind'], parentId: string | null = null): SceneNode => ({
-  id,
-  kind,
-  name: id,
-  parentId,
-  position: [0, 0, 0],
-  rotation: [0, 0, 0],
-  scale: [1, 1, 1],
-  visible: true,
-  locked: false
-});
-
-const nodes = [n('g', 'group'), n('hero', 'character', 'g'), n('hat', 'item', 'hero'), n('crate', 'prop'), n('map', 'map')];
+const nodes = [n('g', 'group'), n('hero', 'character', 'g'), n('hat', 'item', 'hero'), n('crate', 'prop'), n('map', 'group', null, { mapId: '1' })];
 
 describe('defaultInsertParent', () => {
   it('uses the selected node when it can hold children', () => {
