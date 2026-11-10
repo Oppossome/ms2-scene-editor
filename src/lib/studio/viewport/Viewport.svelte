@@ -1,8 +1,9 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core';
   import type { Object3D } from 'three';
-  import type { Snippet } from 'svelte';
+  import { onDestroy, type Snippet } from 'svelte';
   import Stage from './Stage.svelte';
+  import { cameraFocus } from './camera-focus.js';
   import { assetUrl } from '../../assets/urls.js';
   import type { FogSpec } from './fog.js';
   import type { ViewApi } from './viewapi.js';
@@ -16,6 +17,8 @@
     interactive?: boolean;
     onGroundClick?: () => void;
     viewApi?: ViewApi;
+    /** Receives camera movement when the pointer is outside every viewport. */
+    main?: boolean;
     /** Painted backdrop behind the scene, a path under `converted/textures`. */
     background?: string;
     /** Distance fog, measured for the game camera (see `fogRange`). */
@@ -32,19 +35,38 @@
     interactive = false,
     onGroundClick,
     viewApi,
+    main = false,
     background,
     fog = null,
     children
   }: Props = $props();
+
+  const view = Symbol();
+  onDestroy(() => cameraFocus.leave(view));
 </script>
 
 <div
   class="viewport"
+  role="region"
+  aria-label={main ? 'Scene viewport' : 'Preview viewport'}
   class:backdrop={!!background}
   style:background-image={background ? `url("${assetUrl(`converted/textures/${background}`)}")` : undefined}
+  onpointerenter={() => cameraFocus.enter(view)}
+  onpointerleave={() => cameraFocus.leave(view)}
 >
   <Canvas>
-    <Stage {object} {frameToken} {grid} {gridSize} {onTick} {interactive} {onGroundClick} {viewApi} {fog}>
+    <Stage
+      {object}
+      {frameToken}
+      {grid}
+      {gridSize}
+      {onTick}
+      {interactive}
+      {onGroundClick}
+      {viewApi}
+      {fog}
+      canFly={() => cameraFocus.isActive(view, main)}
+    >
       {@render children?.()}
     </Stage>
   </Canvas>

@@ -181,6 +181,7 @@
 
       <div class="viewport">
         <Viewport
+          main
           viewApi={studio.view}
           grid={studio.showGrid}
           gridSize={4000}

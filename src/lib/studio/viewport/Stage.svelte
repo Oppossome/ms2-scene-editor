@@ -21,6 +21,7 @@
     /** Called when the empty ground is clicked. */
     onGroundClick?: () => void;
     viewApi?: ViewApi;
+    canFly: () => boolean;
     /** Distance fog, measured for the game camera. */
     fog?: FogSpec | null;
     children?: Snippet;
@@ -35,6 +36,7 @@
     interactive = false,
     onGroundClick,
     viewApi,
+    canFly,
     fog = null,
     children
   }: Props = $props();
@@ -72,7 +74,7 @@
 
   let fogRef = $state<Fog>();
 
-  // WASD keys currently held; the camera glides while they are down.
+  // All stages track held keys; only the view under the pointer (or the main fallback) moves.
   const held = new Set<string>();
   const look = new Vector3();
   const forward = new Vector3();
@@ -94,7 +96,7 @@
   }
 
   function fly(delta: number) {
-    if (!camera || !controls || held.size === 0) return;
+    if (!camera || !controls || held.size === 0 || !canFly()) return;
     let x = 0;
     let y = 0;
     let z = 0;

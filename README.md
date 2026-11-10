@@ -53,6 +53,8 @@ Maps insert as editable groups of props, with a **Lighting** child for the paint
 
 Viewport clicks skip entities that are locked or have a locked ancestor. Hold **Ctrl** to select them anyway, including when right-clicking for the context menu; **Alt+click** selects the top-level ancestor and can be combined with Ctrl. Hidden entities remain unselectable in the viewport.
 
+**WASDQE** moves only the view under the mouse, including Toolbox and animation previews. When the mouse is outside every view, it moves the main viewport instead.
+
 Scene saves now use version 3 (each entity tagged with its `type`). Existing version-1 and 2 scenes and outfits still load; old maps are converted before the scene is replaced. Conversion requires the original map assets, and a failed conversion preserves the original autosave. Whole imported maps remain omitted from GLB export by default.
 
 Code is organized by ownership: [entities](./src/lib/entities/) own properties, persistence and rendering, with [character functionality](./src/lib/entities/character/) kept together; [scene](./src/lib/scene/) coordinates documents and transactions; [studio](./src/lib/studio/) groups UI by editor feature. Asset loading, maps, export and server access remain shared services. Tests live beside their owning modules.
