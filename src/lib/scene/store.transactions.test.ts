@@ -116,7 +116,7 @@ describe('scene transactions', () => {
     const group = store.add({ type: 'group', name: 'G' });
     store.changedIds.clear();
     const child = store.add({ type: 'group', name: 'C', parentId: group });
-    expect([...store.changedIds]).toEqual([child]);
+    expect([...store.changedIds].sort()).toEqual([child, group].sort());
     store.changedIds.clear();
     store.update(child, { name: 'D' });
     expect([...store.changedIds].sort()).toEqual([child, group].sort());

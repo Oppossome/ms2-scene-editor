@@ -37,6 +37,19 @@ describe('scene rendering integration', () => {
     expect(other).toHaveBeenCalledTimes(1);
   });
 
+  it('rerenders a character when a clothing child is added', () => {
+    const characterId = store.add({ type: 'character', name: 'Character' });
+    const character = store.node(characterId)!;
+    const renderCharacter = vi.spyOn(character, 'render').mockImplementation(() => {});
+    render();
+    renderCharacter.mockClear();
+
+    store.equipItem(characterId, { itemId: '10000001', name: 'Shirt', slots: ['CL'] });
+    render();
+
+    expect(renderCharacter).toHaveBeenCalledOnce();
+  });
+
   it('discards stale loads after the source changes or the entity is deleted', async () => {
     let first!: (value: { object: Group; animations: [] }) => void;
     let second!: (value: { object: Group; animations: [] }) => void;

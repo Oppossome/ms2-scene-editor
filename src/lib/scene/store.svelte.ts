@@ -120,7 +120,11 @@ export class SceneState {
     this.commit();
     const before = new Set(this.entities);
     const after = new Set(next);
-    for (const entity of next) if (!before.has(entity)) this.changedIds.add(entity.id);
+    for (const entity of next) {
+      if (before.has(entity)) continue;
+      this.changedIds.add(entity.id);
+      if (entity.parentId) this.changedIds.add(entity.parentId);
+    }
     // A character dresses itself from its children, so it renders again when one leaves.
     for (const entity of this.entities) if (!after.has(entity) && entity.parentId) this.changedIds.add(entity.parentId);
     this.entities = next;
