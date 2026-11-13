@@ -4,6 +4,7 @@ import type { Vec3 } from './constants.js';
 import type { Entity, EntityInput } from './types.js';
 import type { PickChannel } from './character/appearance.js';
 import type { Dye } from './character/tint.js';
+import type { ItemTexture } from './character/texture-override.js';
 import { vectorSchema } from './validation.js';
 
 export interface PropContext {
@@ -17,6 +18,8 @@ export interface PropContext {
   holdable: boolean;
   palette: number;
   channels: [main: boolean, detail: boolean];
+  /** A worn item's own colour maps, which the user can replace with images of their own. */
+  textures: ItemTexture[];
 }
 
 interface ControlBase {
@@ -59,6 +62,13 @@ export type PropertyControl =
       min?: number;
       max?: number;
       edit: (value: Vec3) => EntityInput;
+    })
+  | (ControlBase & {
+      type: 'texture';
+      /** Texture key -> id of the user's image. */
+      value: Record<string, string>;
+      textures: ItemTexture[];
+      edit: (value: Record<string, string>) => EntityInput;
     })
   | (ControlBase & { type: 'bool'; value: boolean; edit: (value: boolean) => EntityInput })
   | (ControlBase & { type: 'readonly'; value: string })

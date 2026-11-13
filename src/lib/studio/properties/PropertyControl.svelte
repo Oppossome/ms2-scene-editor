@@ -6,6 +6,7 @@
   import FrameScrubber from './FrameScrubber.svelte';
   import NumberField from '../controls/NumberField.svelte';
   import PaletteRow from '../controls/PaletteRow.svelte';
+  import TextureRow from '../controls/TextureRow.svelte';
   import BackgroundPicker from '../dialogs/BackgroundPicker.svelte';
   import { backdropPath } from '#lib/studio/viewport/view-settings.js';
 
@@ -86,6 +87,13 @@
     channel={row.channel}
     custom={row.custom}
     onpick={(value) => commit(row.edit(value))}
+  />
+{:else if row.type === 'texture'}
+  <TextureRow
+    textures={row.textures}
+    value={row.value}
+    onchange={(value) => commit(row.edit(value))}
+    onerror={(message) => (studio.message = message)}
   />
 {:else if row.type === 'transport'}
   {#if row.max !== undefined && selected}

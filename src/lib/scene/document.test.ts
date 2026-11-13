@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseScene, parseSceneJson } from './document';
+import { embeddedTextures, parseScene, parseSceneJson, sceneTextureIds } from './document';
 import { CharacterEntity } from '../entities/character/character.svelte.js';
 import { GroupEntity } from '../entities/group.svelte.js';
 import { ItemEntity } from '../entities/character/item.svelte.js';
@@ -247,5 +247,30 @@ describe('type-tagged scenes (version 3)', () => {
   it('restores -0 as 0, so a saved scene equals its restored copy', () => {
     const doc = parseScene({ version: 3, entities: [{ type: 'group', id: 'a', ...base, rotation: [-0, 0, -0] }] })!;
     expect(Object.is(doc.entities[0].rotation[0], 0)).toBe(true);
+  });
+});
+
+describe('embedded user textures', () => {
+  it('lists the image ids a scene uses and reads the images a file carries', () => {
+    const a = 'a'.repeat(64);
+    const b = 'b'.repeat(64);
+    expect(
+      sceneTextureIds([
+        { textures: { 'x.png': a, 'y.png': b } },
+        { textures: { 'z.png': a } },
+        {},
+        null,
+        { textures: 3 }
+      ])
+    ).toEqual([a, b]);
+    expect(embeddedTextures({ textures: { [a]: 'data:image/png;base64,' } })).toEqual({
+      [a]: 'data:image/png;base64,'
+    });
+    expect(embeddedTextures({ textures: [] })).toBeNull();
+    expect(embeddedTextures(null)).toBeNull();
+  });
+
+  it('loads a scene whose embedded textures are malformed', () => {
+    expect(parseScene({ version: 3, entities: [], textures: 'nope' })).toEqual({ entities: [], pendingMaps: [] });
   });
 });

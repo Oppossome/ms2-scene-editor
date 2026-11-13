@@ -97,3 +97,11 @@ describe('storage helpers', () => {
     expect(Object.keys(loadSaved(s))).toEqual(['ok']);
   });
 });
+
+describe('outfit texture overrides', () => {
+  it('keeps valid overrides of each item', () => {
+    const id = 'b'.repeat(64);
+    const parsed = parseSnapshot({ ...snap, items: [{ id: '11400024', textures: { 'shirt_d.png': id, x: 1 } }] });
+    expect(parsed?.items[0]).toEqual({ id: '11400024', textures: { 'shirt_d.png': id } });
+  });
+});

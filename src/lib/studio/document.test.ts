@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Studio } from './controller.svelte.js';
 import { SCENE_KEY } from '../scene/document.js';
+import { getUserTexture, memoryTextureStorage, putUserTexture, setTextureStorage } from '../assets/user-textures.js';
 
 const map = {
   id: '1',
@@ -105,6 +106,46 @@ describe('document loading', () => {
       await studio.importJson(new File(['{"version":99,"nodes":[]}'], 'bad.json'));
       expect(studio.store.serialize()).toBe(before);
       expect(studio.message).toMatch(/Cannot load scene:.*version/);
+    } finally {
+      studio.dispose();
+    }
+  });
+});
+
+describe('user textures in scene files', () => {
+  it('embeds the images a scene uses in Export JSON and stores them again on import', async () => {
+    setTextureStorage(memoryTextureStorage());
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 8, height: 8, close() {} }));
+    const id = await putUserTexture(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }));
+    const pose = { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] };
+    const scene = {
+      version: 3,
+      entities: [
+        { ...pose, type: 'character', id: 'c', name: 'C', parentId: null, gender: 1, skin: 0 },
+        {
+          ...pose,
+          type: 'item',
+          id: 'i',
+          name: 'Shirt',
+          parentId: 'c',
+          itemId: '11400024',
+          slots: ['CL'],
+          textures: { 'shirt_d.png': id }
+        }
+      ]
+    };
+    const studio = new Studio();
+    try {
+      await studio.importJson(new File([JSON.stringify(scene)], 'scene.json'));
+      const file = JSON.parse(await studio.sceneFile());
+      expect(file.entities[1].textures).toEqual({ 'shirt_d.png': id });
+      expect(Object.keys(file.textures)).toEqual([id]);
+
+      setTextureStorage(memoryTextureStorage());
+      expect(await getUserTexture(id)).toBeUndefined();
+      await studio.importJson(new File([JSON.stringify(file)], 'scene.json'));
+      expect(await getUserTexture(id)).toBeDefined();
+      expect(studio.store.node('i')).toMatchObject({ textures: { 'shirt_d.png': id } });
     } finally {
       studio.dispose();
     }

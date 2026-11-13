@@ -4,7 +4,7 @@ import { BaseEntity } from '../base.svelte.js';
 import { ZERO, ONE } from '../constants.js';
 import { CharacterEntity } from './character.svelte.js';
 import { editableChannels } from './appearance.js';
-import { channelsSchema, dyeSchema, holdSchema } from './schemas.js';
+import { channelsSchema, dyeSchema, holdSchema, texturesSchema } from './schemas.js';
 import type { EntityInput } from '../types.js';
 import { EntityProperty, type PropContext, type PropertyControl } from '../property.svelte.js';
 import type { RenderContext } from '../render-context.js';
@@ -85,8 +85,28 @@ export class ItemEntity extends BaseEntity {
         : null
     )
   );
+  /** The user's images in place of the item's colour maps: texture key -> stored image id. */
+  readonly texturesProperty = this.define(
+    'textures',
+    new EntityProperty(texturesSchema.optional(), undefined, (value, ctx) =>
+      ctx.textures.length
+        ? {
+            key: 'textures',
+            label: 'Textures',
+            section: 'Textures',
+            type: 'texture',
+            value: value ?? {},
+            textures: ctx.textures,
+            edit: (next) => ({ textures: Object.keys(next).length ? { ...next } : undefined })
+          }
+        : null
+    )
+  );
   get itemId() {
     return this.sourceProperty.value;
+  }
+  get textures() {
+    return this.texturesProperty.value;
   }
   get slots() {
     return this.slotsProperty.value;

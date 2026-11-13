@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { AnimationPlayer } from '../../assets/animation.js';
 import { fetchBodyClips } from '../../assets/clips.js';
 import { loadClips } from '../../assets/loader.js';
+import { loadUserTexture } from '../../assets/user-textures.js';
+import type { Texture } from 'three';
 import { bodyClipDir } from '../../assets/urls.js';
 import { eyeTint, getItem, itemTint, skinTint } from './build.js';
 import { CharacterRig } from './rig.js';
@@ -99,6 +101,8 @@ export class CharacterEntity extends RiggedModel {
   private appearanceGen = 0;
   private itemSig = '';
   private itemColors = new Map<string, string>();
+  /** The texture overrides shown on each worn item (as JSON), so unchanged ones are not applied again. */
+  private itemTextures = new Map<string, string>();
   private reconciling = false;
   private dirty = false;
 
@@ -121,6 +125,7 @@ export class CharacterEntity extends RiggedModel {
     for (const item of this.context?.items(this.id) ?? []) item.resetMount();
     this.itemSig = '';
     this.itemColors.clear();
+    this.itemTextures.clear();
     try {
       const rig = await CharacterRig.create(this.gender, await skinTint(this.skin), await eyeTint(this.eye));
       if (gen !== this.gen || this.disposed) return rig.dispose();
@@ -174,7 +179,10 @@ export class CharacterEntity extends RiggedModel {
     const items = this.context?.items(this.id) ?? [];
     for (const item of items) item.renderOn(this);
     const signature = items
-      .map((item) => `${item.id}:${item.itemId}:${item.color}:${JSON.stringify(item.channelColors)}`)
+      .map(
+        (item) =>
+          `${item.id}:${item.itemId}:${item.color}:${JSON.stringify(item.channelColors)}:${JSON.stringify(item.textures)}`
+      )
       .join('|');
     if (signature === this.itemSig) return;
     this.itemSig = signature;
@@ -199,6 +207,30 @@ export class CharacterEntity extends RiggedModel {
     }
   }
 
+  /**
+   * Show the item's texture overrides (the user's images, kept in the browser). An image this browser does not have
+   * is reported and the item keeps its own texture there. False when the character changed meanwhile.
+   */
+  private async applyTextures(rig: CharacterRig, item: ItemEntity, gen: number): Promise<boolean> {
+    const id = item.itemId;
+    const key = JSON.stringify(item.textures ?? {});
+    if (this.itemTextures.get(id) === key) return true;
+    const images = new Map<string, Texture>();
+    await Promise.all(
+      Object.entries(item.textures ?? {}).map(async ([name, textureId]) => {
+        try {
+          images.set(name, await loadUserTexture(textureId));
+        } catch (error) {
+          this.context?.error(`Could not show ${name} on ${item.name}`, error);
+        }
+      })
+    );
+    if (gen !== this.gen || this.disposed) return false;
+    rig.setItemTextures(id, images);
+    this.itemTextures.set(id, key);
+    return true;
+  }
+
   /** Make the rig wear exactly the item children of this character. */
   private async reconcile() {
     const rig = this.rig;
@@ -212,18 +244,22 @@ export class CharacterEntity extends RiggedModel {
       const id = item.itemId;
       const key = `${item.color}:${JSON.stringify(item.channelColors)}`;
       const worn = rig.isEquipped(id);
-      if (worn && this.itemColors.get(id) === key) continue;
-      const record = await getItem(id);
-      if (!record) throw new Error(`Missing item ${id}`);
-      const colors = await itemTint(record, item.color, item.channelColors);
-      if (gen !== this.gen || this.disposed) return;
-      if (worn) {
-        if (colors) rig.setItemColors(id, colors);
-      } else {
-        await rig.equip(record, colors);
+      if (!worn || this.itemColors.get(id) !== key) {
+        const record = await getItem(id);
+        if (!record) throw new Error(`Missing item ${id}`);
+        const colors = await itemTint(record, item.color, item.channelColors);
+        if (gen !== this.gen || this.disposed) return;
+        if (worn) {
+          if (colors) rig.setItemColors(id, colors);
+        } else {
+          await rig.equip(record, colors);
+          // A fresh model shows its own textures until the overrides are applied to it.
+          this.itemTextures.delete(id);
+        }
+        if (gen !== this.gen || this.disposed) return;
+        this.itemColors.set(id, key);
       }
-      if (gen !== this.gen || this.disposed) return;
-      this.itemColors.set(id, key);
+      if (!(await this.applyTextures(rig, item, gen))) return;
     }
     if (gen !== this.gen || this.disposed) return;
     for (const item of this.context?.items(this.id) ?? []) {
@@ -249,7 +285,8 @@ export class CharacterEntity extends RiggedModel {
           id: item.itemId,
           color: item.color,
           channels: item.channelColors,
-          hold: item.hold
+          hold: item.hold,
+          textures: item.textures
         })
       )
     };

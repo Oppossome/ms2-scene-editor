@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelsSchema, dyeSchema, expressionSchema } from './schemas.js';
+import { channelsSchema, dyeSchema, expressionSchema, texturesSchema } from './schemas.js';
 
 describe('expressionSchema', () => {
   it('accepts a known expression and rejects unknown names and texture paths', () => {
@@ -30,5 +30,17 @@ describe('dyeSchema', () => {
     expect(channelsSchema.parse({ ch0: '#112233', ch2: 2 })).toEqual({ ch0: '#112233', ch2: 2 });
     for (const bad of ['red', '#abc', 'a0b1c2', '#a0b1c2ff', -1, 1.5])
       expect(dyeSchema.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe('texturesSchema', () => {
+  it('keeps texture file names mapped to stored image ids and drops anything else', () => {
+    const id = 'a'.repeat(64);
+    expect(texturesSchema.parse({ '01400009_m_ugc01_d.png': id })).toEqual({ '01400009_m_ugc01_d.png': id });
+    expect(texturesSchema.parse({ '../x.png': id, 'A.PNG': id, 'b.png': 'short', 'c.png': 5, 'd.jpg': id })).toEqual({
+      'd.jpg': id
+    });
+    expect(texturesSchema.parse({})).toBeUndefined();
+    expect(texturesSchema.safeParse([]).success).toBe(false);
   });
 });

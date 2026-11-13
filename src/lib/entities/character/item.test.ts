@@ -51,3 +51,21 @@ describe('ItemEntity controls', () => {
     expect(item.toJSON()).toMatchObject({ hold: 'carry' });
   });
 });
+
+describe('ItemEntity texture overrides', () => {
+  it('offers a texture row for worn items with textures, and clears the property when none are left', () => {
+    const id = 'a'.repeat(64);
+    const item = new ItemEntity();
+    item.set({ itemId: '11400024', slots: ['CL'], parentId: 'p', textures: { 'shirt_d.png': id, '../bad': id } });
+    expect(item.textures).toEqual({ 'shirt_d.png': id });
+    expect(item.toJSON()).toMatchObject({ textures: { 'shirt_d.png': id } });
+    const context = controlContext(item, { parent: new CharacterEntity({ id: 'p' }) });
+    expect(item.controls(context).find((row) => row.key === 'textures')).toBeUndefined();
+    const textures = [{ key: 'shirt_d.png', url: '/api/assets/shirt_d.png' }];
+    const row = controlRow({ ...context, textures }, 'textures');
+    expect(row).toMatchObject({ type: 'texture', section: 'Textures', value: { 'shirt_d.png': id }, textures });
+    if (row.type !== 'texture') throw new Error('not a texture row');
+    expect(row.edit({})).toEqual({ textures: undefined });
+    expect(row.edit({ 'shirt_d.png': id })).toEqual({ textures: { 'shirt_d.png': id } });
+  });
+});

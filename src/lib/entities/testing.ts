@@ -13,6 +13,7 @@ export function controlContext(node: Entity, overrides: Partial<PropContext> = {
     holdable: false,
     palette: 0,
     channels: [true, true],
+    textures: [],
     ...overrides
   };
 }

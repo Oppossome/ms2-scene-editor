@@ -34,6 +34,7 @@ export interface NewNode {
   color?: Dye;
   channelColors?: ChannelDyes;
   hold?: 'hand' | 'carry';
+  textures?: Record<string, string>;
   slots?: string[];
   clip?: string;
   position?: Vec3;
@@ -50,6 +51,7 @@ export interface NewItem {
   color?: Dye;
   channelColors?: ChannelDyes;
   hold?: 'hand' | 'carry';
+  textures?: Record<string, string>;
   attachBone?: string;
 }
 
@@ -91,6 +93,7 @@ const itemSpec = (item: NewItem): NewNode => ({
   color: item.color,
   channelColors: item.channelColors,
   hold: item.hold,
+  textures: item.textures,
   attachBone: item.attachBone
 });
 
@@ -305,6 +308,7 @@ export class SceneState {
       node.color === item.color &&
       JSON.stringify(node.slots) === JSON.stringify(item.slots) &&
       JSON.stringify(node.channelColors) === JSON.stringify(item.channelColors) &&
+      JSON.stringify(node.textures) === JSON.stringify(item.textures) &&
       !node.attachBone &&
       [...node.position, ...node.rotation].every((v) => v === 0) &&
       node.scale.every((v) => v === 1);

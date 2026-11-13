@@ -19,6 +19,7 @@ import { untrack } from 'svelte';
 import type { AnimationPlayer } from '../assets/animation.js';
 import { instantiate } from '../assets/loader.js';
 import type { CharacterRig, BoneInfo } from '../entities/character/rig.js';
+import type { ItemTexture } from '../entities/character/texture-override.js';
 import { exportGlb } from '../export/glb.js';
 import { EntityBatches, InstanceTarget } from '../maps/entity-batches.js';
 import type { ClipInfo, MapEnvironment } from '../types.js';
@@ -215,6 +216,14 @@ export class SceneRuntime {
     const item = this.byId.get(itemId);
     const rig = item?.parentId ? this.rigOf(item.parentId) : null;
     return item instanceof ItemEntity && !!rig && rig.isHoldable(item.itemId);
+  }
+
+  /** The colour maps of a worn item that can be replaced with the user's own images. */
+  texturesOf(itemId: string): ItemTexture[] {
+    void this.version;
+    const item = this.byId.get(itemId);
+    const rig = item?.parentId ? this.rigOf(item.parentId) : null;
+    return item instanceof ItemEntity && rig ? rig.texturesOf(item.itemId) : [];
   }
 
   defaultBoneOf(itemId: string): string {

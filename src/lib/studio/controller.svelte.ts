@@ -1,10 +1,11 @@
 import { getItem } from '../entities/character/build.js';
-import { downloadBuffer, safeFilename } from '../export/glb.js';
+import { downloadBlob, downloadBuffer, safeFilename } from '../export/glb.js';
+import { exportUserTextures, importUserTextures } from '../assets/user-textures.js';
 import { composeMap, expandLegacyMaps, fetchMap } from '../maps/entities.js';
 import type { ViewApi } from './viewport/viewapi.js';
 import { defaultInsertParent, itemTargetCharacter } from './toolbox/insert.js';
 import { DEFAULT_EYE, DEFAULT_SKIN } from '../entities/character/appearance.js';
-import { SCENE_KEY, parseSceneJson } from '../scene/document.js';
+import { SCENE_KEY, embeddedTextures, parseSceneJson, sceneTextureIds } from '../scene/document.js';
 import type { Vec3 } from '../entities/constants.js';
 import { restoreEntity } from '../entities/registry.js';
 import { CharacterEntity } from '../entities/character/character.svelte.js';
@@ -290,7 +291,8 @@ export class Studio {
           slots: record.slots,
           color: entry.color,
           channelColors: entry.channels,
-          hold: entry.hold
+          hold: entry.hold,
+          textures: entry.textures
         });
       }
     });
@@ -381,17 +383,35 @@ export class Studio {
     }
   }
 
-  exportJson() {
-    const blob = new Blob([this.store.serialize(2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'scene.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+  /** The scene as JSON, carrying the user's images it uses (they only exist in this browser otherwise). */
+  async sceneFile(indent?: number): Promise<string> {
+    const scene = JSON.parse(this.store.serialize()) as { entities: unknown[]; textures?: Record<string, string> };
+    const ids = sceneTextureIds(scene.entities);
+    if (ids.length) scene.textures = await exportUserTextures(ids);
+    return JSON.stringify(scene, null, indent);
   }
 
+  async exportJson() {
+    try {
+      downloadBlob(new Blob([await this.sceneFile(2)], { type: 'application/json' }), 'scene.json');
+    } catch (e) {
+      this.message = `Export failed: ${e instanceof Error ? e.message : e}`;
+    }
+  }
+
+  /** Load a scene file, first storing the images it carries so its texture overrides show. */
   async importJson(file: File) {
-    await this.loadDocument(await file.text());
+    const text = await file.text();
+    const issues: string[] = [];
+    try {
+      const textures = embeddedTextures(JSON.parse(text));
+      if (textures) await importUserTextures(textures, issues);
+    } catch {
+      // Not JSON: loadDocument reports it.
+    }
+    const loaded = await this.loadDocument(text);
+    if (loaded && issues.length)
+      this.message = [this.message, `Some images were not loaded: ${issues.join('; ')}`].filter(Boolean).join(' ');
   }
 
   private async loadDocument(text: string, initial = false): Promise<boolean> {

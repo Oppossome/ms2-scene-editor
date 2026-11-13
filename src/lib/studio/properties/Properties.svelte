@@ -71,7 +71,8 @@
         skinned: runtime.isSkinned(selected.id),
         holdable: runtime.isHoldable(selected.id),
         palette: hasOwnColours(itemRecord) ? (itemRecord?.palette ?? 0) : 0,
-        channels: itemRecord?.channels ?? [true, true]
+        channels: itemRecord?.channels ?? [true, true],
+        textures: runtime.texturesOf(selected.id)
       });
     }
     const groups = new Map<string, PropertyControl[]>();
@@ -99,8 +100,8 @@
       <details open>
         <summary>{section.section}</summary>
         {#each section.rows as row (row.key)}
-          <div class="row" class:wide={row.type === 'palette'}>
-            <span class="label" title={row.disabled ?? row.label}>{row.label}</span>
+          <div class="row" class:wide={row.type === 'palette'} class:full={row.type === 'texture'}>
+            {#if row.type !== 'texture'}<span class="label" title={row.disabled ?? row.label}>{row.label}</span>{/if}
             <div class="value"><PropertyEditor {row} {studio} source={clipSource} /></div>
           </div>
         {/each}
@@ -171,6 +172,10 @@
     gap: 6px;
     padding: 2px 8px;
     min-height: 26px;
+  }
+  .row.full {
+    grid-template-columns: 1fr;
+    padding: 4px 8px;
   }
   .row.wide {
     align-items: start;

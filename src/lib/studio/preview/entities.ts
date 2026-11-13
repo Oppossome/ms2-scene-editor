@@ -13,6 +13,8 @@ export interface PreviewItem {
   color?: Dye;
   channels?: ChannelDyes;
   hold?: HoldMode;
+  /** Texture overrides: texture key -> id of an image stored in the browser. */
+  textures?: Record<string, string>;
 }
 
 /** What a preview shows, besides maps: always turned into scene entities that render exactly as in the scene. */
@@ -70,6 +72,7 @@ function itemJson(record: ItemRecord, parentId: string, index: number, worn: Omi
     color: worn.color,
     channelColors: worn.channels,
     hold: worn.hold,
+    textures: worn.textures,
     ...IDENTITY
   });
 }

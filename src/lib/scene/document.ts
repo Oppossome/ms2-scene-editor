@@ -11,7 +11,9 @@ export const SCENE_KEY = 'ms2se.scene.current';
 const sceneEnvelopeSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   nodes: z.array(z.unknown()).optional(),
-  entities: z.array(z.unknown()).optional()
+  entities: z.array(z.unknown()).optional(),
+  /** The user's images the scene uses (id -> data URL), embedded by Export JSON; see `embeddedTextures`. */
+  textures: z.record(z.string(), z.unknown()).optional().catch(undefined)
 });
 
 export interface SceneDocument {
@@ -112,4 +114,23 @@ export function parseSceneJson(text: string, issues: string[] = []): SceneDocume
     issues.push(`Invalid JSON: ${error.message}`);
     return null;
   }
+}
+
+/** Ids of the user's images (texture overrides) that the entities of a saved scene use. */
+export function sceneTextureIds(entities: readonly unknown[]): string[] {
+  const ids = new Set<string>();
+  for (const entity of entities) {
+    const textures = (entity as { textures?: unknown } | null)?.textures;
+    if (!textures || typeof textures !== 'object') continue;
+    for (const id of Object.values(textures)) if (typeof id === 'string') ids.add(id);
+  }
+  return [...ids];
+}
+
+/** The images a scene file carries (`textures`: id -> data URL), or null when it has none. */
+export function embeddedTextures(data: unknown): Record<string, unknown> | null {
+  const textures = (data as { textures?: unknown } | null)?.textures;
+  return textures && typeof textures === 'object' && !Array.isArray(textures)
+    ? (textures as Record<string, unknown>)
+    : null;
 }

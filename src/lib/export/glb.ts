@@ -62,7 +62,12 @@ export async function exportGlb(input: Object3D | Object3D[], options: GlbOption
 }
 
 export function downloadBuffer(buffer: ArrayBuffer, filename: string, type = 'model/gltf-binary') {
-  const url = URL.createObjectURL(new Blob([buffer], { type }));
+  downloadBlob(new Blob([buffer], { type }), filename);
+}
+
+/** Save a blob as a file (a download made in the page; nothing is sent anywhere). */
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;

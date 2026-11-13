@@ -1,4 +1,4 @@
-import { Group, Mesh, Object3D, PropertyBinding, Skeleton, SkinnedMesh } from 'three';
+import { Group, Mesh, Object3D, PropertyBinding, Skeleton, SkinnedMesh, type Texture } from 'three';
 import { instantiate } from '../../assets/loader.js';
 import { bodyModel } from '../../assets/urls.js';
 import type { ItemAsset, ItemRecord } from '../../types.js';
@@ -8,6 +8,7 @@ import { FaceAnimator } from './face-animation.js';
 import type { FaceExpression } from './expressions.js';
 import { applyTint, type TintColors, type TintHandle } from './tint.js';
 import { drawsWeapons, handNode, inHand, type HoldMode } from './weapons.js';
+import { applyTextureOverrides, listItemTextures, type ItemTexture } from './texture-override.js';
 
 /** The slot of face items. */
 const FACE_SLOT = 'FA';
@@ -166,6 +167,18 @@ export class CharacterRig {
     // A worn face follows the character's eye colour, not a colour of its own.
     if (eq?.slots.includes(FACE_SLOT) && this.eyeColors) return;
     for (const tint of eq?.tints ?? []) tint.setColors(colors);
+  }
+
+  /** The item's own colour maps that can be overridden; none for faces, whose maps follow the face sequence. */
+  texturesOf(itemId: string): ItemTexture[] {
+    const eq = this.equipped.get(itemId);
+    return eq && !eq.slots.includes(FACE_SLOT) ? listItemTextures(eq.objects) : [];
+  }
+
+  /** Show the user's images (texture key -> image) in place of the item's colour maps; others go back to normal. */
+  setItemTextures(itemId: string, overrides: ReadonlyMap<string, Texture>) {
+    const eq = this.equipped.get(itemId);
+    if (eq && !eq.slots.includes(FACE_SLOT)) applyTextureOverrides(eq.objects, overrides);
   }
 
   isEquipped(itemId: string) {
