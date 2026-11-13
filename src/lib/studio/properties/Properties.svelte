@@ -45,7 +45,8 @@
       return { kind: 'entities', entities: sceneEntities(node, store.itemsOf(node.id)) };
     return node instanceof ModelEntity ? { kind: 'entities', entities: sceneEntities(node) } : null;
   });
-  const sections = $derived.by(() => {
+  const HIDDEN = new Set(['visible', 'locked']);
+  const panel = $derived.by(() => {
     let controls: PropertyControl[];
     if (bone)
       controls = [
@@ -60,7 +61,7 @@
         }
       ];
     else {
-      if (!selected) return [];
+      if (!selected) return { name: undefined, subtitle: '', details: [], groups: [] };
       const parent = store.node(selected.parentId);
       controls = selected.controls({
         node: selected,
@@ -75,14 +76,45 @@
         textures: runtime.texturesOf(selected.id)
       });
     }
+    // The name and what the node is head the panel; other read-only facts (parent, id, source...) go to Details.
+    // Visibility and locking are toggled in the Explorer, and rows that cannot be edited (the offset of skinned
+    // clothes) are left out instead of shown greyed.
+    const name = controls.find((row) => row.key === 'name');
+    const kind = controls.find((row) => row.key === 'class');
+    const slots = controls.find((row) => row.key === 'slots');
+    const details: PropertyControl[] = [];
     const groups = new Map<string, PropertyControl[]>();
     for (const control of controls) {
+      if (control === name || control === kind || HIDDEN.has(control.key) || control.disabled) continue;
+      if (control.type === 'readonly') {
+        if (control !== slots) details.push(control);
+        continue;
+      }
       const rows = groups.get(control.section) ?? [];
       rows.push(control);
       groups.set(control.section, rows);
     }
-    return [...groups].map(([section, rows]) => ({ section, rows }));
+    return {
+      name,
+      subtitle: [kind?.type === 'readonly' ? kind.value : '', slots?.type === 'readonly' ? slots.value : '']
+        .filter(Boolean)
+        .join(' · '),
+      details,
+      groups: [...groups].map(([section, rows]) => ({ section, rows }))
+    };
   });
+  const sections = $derived(panel.groups);
+
+  /** Main and detail colour pickers are folded under the colour set unless the item already uses them. */
+  let channelsOpen = $state(false);
+  const usesChannels = $derived(selected instanceof ItemEntity && !!selected.channelColors);
+  $effect(() => {
+    void selected?.id;
+    channelsOpen = false;
+  });
+  const isChannelRow = (row: PropertyControl) => row.key.startsWith('colorCh');
+  const visibleRows = (rows: PropertyControl[]) =>
+    channelsOpen || usesChannels ? rows : rows.filter((row) => !isChannelRow(row));
   let outfitName = $state('');
   let saved = $state('');
   function saveOutfit() {
@@ -96,26 +128,47 @@
   {#if !selected && !bone}
     <p class="empty">Select something in the Explorer or the viewport to see its properties.</p>
   {:else}
+    <header class="head">
+      {#if panel.name?.type === 'string'}
+        {@const nameRow = panel.name}
+        <input
+          class="name"
+          value={nameRow.value}
+          aria-label="Name"
+          onchange={(e) => selected && store.update(selected.id, nameRow.edit(e.currentTarget.value))}
+        />
+      {:else if panel.name?.type === 'readonly'}
+        <div class="name static">{panel.name.value}</div>
+      {/if}
+      {#if panel.subtitle}<div class="subtitle">{panel.subtitle}</div>{/if}
+    </header>
     {#each sections as section (section.section)}
+      {@const rows = visibleRows(section.rows)}
+      {@const folded = section.rows.some(isChannelRow) && !usesChannels}
       <details open>
         <summary>{section.section}</summary>
-        {#each section.rows as row (row.key)}
+        {#each rows as row (row.key)}
           <div class="row" class:wide={row.type === 'palette'} class:full={row.type === 'texture'}>
-            {#if row.type !== 'texture'}<span class="label" title={row.disabled ?? row.label}>{row.label}</span>{/if}
+            {#if row.type !== 'texture'}<span class="label" title={row.label}>{row.label}</span>{/if}
             <div class="value"><PropertyEditor {row} {studio} source={clipSource} /></div>
           </div>
+          {#if row.key === 'color' && folded}
+            <div class="row">
+              <span></span>
+              <button class="link" onclick={() => (channelsOpen = !channelsOpen)} aria-expanded={channelsOpen}>
+                {channelsOpen ? '▾' : '▸'} Main / detail colours
+              </button>
+            </div>
+          {/if}
         {/each}
         {#if section.section === 'Transform' && selected?.type === 'group'}
           <div class="extra">
             <button
               onclick={() => studio.centerGroup(selected.id)}
               disabled={!groupCenterPositions}
-              title="Center the group on its children's visible bounds without moving them">Center on children</button
+              title="Move the group origin to the center of its children's visible bounds; their world positions stay unchanged"
+              >Center on children</button
             >
-            <p class="hint">
-              Moves the group origin to the center of its children's visible bounds; their world positions stay
-              unchanged.
-            </p>
           </div>
         {/if}
       </details>
@@ -136,6 +189,19 @@
           {#if saved}<p class="hint">{saved}</p>{/if}
           <button onclick={() => store.setOutfit(character.id, [])}>Remove all items</button>
         </div>
+      </details>
+    {/if}
+    {#if panel.details.length}
+      <details class="info">
+        <summary>Details</summary>
+        {#each panel.details as row (row.key)}
+          <div class="row">
+            <span class="label" title={row.label}>{row.label}</span>
+            <div class="value readonly" title={row.type === 'readonly' ? row.value : ''}>
+              {row.type === 'readonly' ? row.value : ''}
+            </div>
+          </div>
+        {/each}
       </details>
     {/if}
     {#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
@@ -207,6 +273,51 @@
     margin: 0;
     color: var(--muted);
     font-size: 11px;
+  }
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 8px 7px;
+    border-bottom: 1px solid var(--border);
+  }
+  .name {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 3px 6px;
+    margin: 0 -6px;
+    border-color: transparent;
+    background: transparent;
+    min-width: 0;
+  }
+  input.name:hover,
+  input.name:focus {
+    border-color: var(--border);
+    background: var(--panel-2);
+  }
+  .name.static {
+    padding: 3px 0;
+    margin: 0;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .link {
+    justify-self: start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .link:hover {
+    color: inherit;
+  }
+  .readonly {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .error {
     color: #ff9a9a;
