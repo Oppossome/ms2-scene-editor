@@ -8,7 +8,7 @@ import type { FaceExpression } from '../entities/character/expressions.js';
 import type { MapEnvironment } from '../types.js';
 import { canParent, cloneSubtree, deleteSubtree, uniqueName } from './tree.js';
 import { CharacterEntity } from '../entities/character/character.svelte.js';
-import { ItemEntity } from '../entities/character/item.svelte.js';
+import { ItemEntity, replacesItem } from '../entities/character/item.svelte.js';
 import { restoreEntity } from '../entities/registry.js';
 import type { Entity, EntityInput, EntityType } from '../entities/types.js';
 import type { RegisteredProperty } from '../entities/property.svelte.js';
@@ -33,6 +33,7 @@ export interface NewNode {
   itemId?: string;
   color?: number;
   channelColors?: ChannelIndexes;
+  hold?: 'hand' | 'carry';
   slots?: string[];
   clip?: string;
   position?: Vec3;
@@ -48,6 +49,7 @@ export interface NewItem {
   slots: string[];
   color?: number;
   channelColors?: ChannelIndexes;
+  hold?: 'hand' | 'carry';
   attachBone?: string;
 }
 
@@ -88,6 +90,7 @@ const itemSpec = (item: NewItem): NewNode => ({
   slots: item.slots,
   color: item.color,
   channelColors: item.channelColors,
+  hold: item.hold,
   attachBone: item.attachBone
 });
 
@@ -274,8 +277,9 @@ export class SceneState {
   equipItem(characterId: string, item: NewItem, select = true): string {
     if (this.node(characterId)?.type !== 'character') return '';
     this.record();
-    const clash = (n: ItemEntity) => n.itemId === item.itemId || n.slots.some((s) => item.slots.includes(s));
-    const kept = this.nodes.filter((n) => !(n instanceof ItemEntity && n.parentId === characterId && clash(n)));
+    const kept = this.nodes.filter(
+      (n) => !(n instanceof ItemEntity && n.parentId === characterId && replacesItem(n, item))
+    );
     const node = createEntity(itemSpec(item), characterId);
     this.nodes = this.insert(kept, node);
     if (select) this.select(node.id);

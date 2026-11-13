@@ -4,11 +4,19 @@ import { BaseEntity } from '../base.svelte.js';
 import { ZERO, ONE } from '../constants.js';
 import { CharacterEntity } from './character.svelte.js';
 import { editableChannels } from './appearance.js';
-import { channelsSchema } from './schemas.js';
+import { channelsSchema, holdSchema } from './schemas.js';
 import type { EntityInput } from '../types.js';
 import { EntityProperty, type PropContext, type PropertyControl } from '../property.svelte.js';
 import type { RenderContext } from '../render-context.js';
 import { numericId, indexSchema } from '../validation.js';
+
+/** Whether wearing `next` takes `worn` off: it is the same item or shares one of its slots. */
+export function replacesItem(
+  worn: { itemId: string; slots: readonly string[] },
+  next: { itemId: string; slots: readonly string[] }
+): boolean {
+  return worn.itemId === next.itemId || worn.slots.some((slot) => next.slots.includes(slot));
+}
 
 /** A worn item: its meshes belong to the parent character's rig, which this entity only configures. */
 export class ItemEntity extends BaseEntity {
@@ -55,6 +63,26 @@ export class ItemEntity extends BaseEntity {
     )
   );
   readonly channelsProperty = this.define('channelColors', new EntityProperty(channelsSchema.optional(), undefined));
+  readonly holdProperty = this.define(
+    'hold',
+    new EntityProperty(holdSchema.optional(), undefined, (value, ctx) =>
+      ctx.holdable
+        ? {
+            key: 'hold',
+            label: 'Hold',
+            section: 'Attachment',
+            type: 'enum',
+            value: value ?? '',
+            options: [
+              { value: '', label: 'Automatic (animation)' },
+              { value: 'hand', label: 'In hand' },
+              { value: 'carry', label: 'Carried' }
+            ],
+            edit: (mode) => ({ hold: mode || undefined })
+          }
+        : null
+    )
+  );
   get itemId() {
     return this.sourceProperty.value;
   }
@@ -66,6 +94,9 @@ export class ItemEntity extends BaseEntity {
   }
   get channelColors() {
     return this.channelsProperty.value;
+  }
+  get hold() {
+    return this.holdProperty.value;
   }
 
   private mountedBone = '';
@@ -92,6 +123,7 @@ export class ItemEntity extends BaseEntity {
     const rig = parent.rig;
     if (!rig?.isEquipped(this.itemId)) return;
     const mounts = rig.mountsOf(this.itemId);
+    rig.setHold(this.itemId, this.hold);
     const bone = this.attachBone ?? '';
     if (mounts.length && this.mountedBone !== bone) {
       rig.mountOn(this.itemId, bone);

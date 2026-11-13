@@ -27,6 +27,8 @@ export abstract class RiggedModel extends BaseEntity {
   }
 
   player: AnimationPlayer | null = null;
+  /** Whether the clip repeats (a preview can play it once); not saved, scenes always loop. */
+  loop = true;
   protected clipRequested: string | undefined;
   private freezeApplied: number | undefined;
 
@@ -92,7 +94,7 @@ export abstract class RiggedModel extends BaseEntity {
     try {
       const clip = await this.loadClip(name);
       if (this.disposed || this.player !== player || this.clipRequested !== name) return;
-      if (clip) player.play(clip, true);
+      if (clip) player.play(clip, this.loop);
       this.applyFreeze();
       this.tick(0);
     } catch (error) {

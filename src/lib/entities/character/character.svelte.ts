@@ -158,8 +158,9 @@ export class CharacterEntity extends RiggedModel {
     return (await loadClips(`${bodyClipDir(this.gender)}/${name}.glb`))[0];
   }
 
+  /** Faces follow the clip's face sequence, weapons are held during combat clips. */
   private updateFace() {
-    this.rig?.updateFace(this.player?.clip?.name ?? '', this.player?.time ?? 0, this.expression);
+    this.rig?.followClip(this.player?.clip?.name ?? '', this.player?.time ?? 0, this.expression);
   }
 
   tick(delta: number) {
@@ -247,7 +248,8 @@ export class CharacterEntity extends RiggedModel {
         omitUndefined({
           id: item.itemId,
           color: item.color,
-          channels: item.channelColors
+          channels: item.channelColors,
+          hold: item.hold
         })
       )
     };

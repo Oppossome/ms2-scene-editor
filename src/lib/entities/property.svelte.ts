@@ -12,6 +12,8 @@ export interface PropContext {
   bones: string[];
   defaultBone: string;
   skinned: boolean;
+  /** A worn weapon that moves between its carry point and a hand. */
+  holdable: boolean;
   palette: number;
   channels: [main: boolean, detail: boolean];
 }

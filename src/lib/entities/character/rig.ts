@@ -7,9 +7,22 @@ import { applyFaceTextures } from './face.js';
 import { FaceAnimator } from './face-animation.js';
 import type { FaceExpression } from './expressions.js';
 import { applyTint, type TintColors, type TintHandle } from './tint.js';
+import { drawsWeapons, handNode, inHand, type HoldMode } from './weapons.js';
 
 /** The slot of face items. */
 const FACE_SLOT = 'FA';
+
+interface Mount {
+  mount: Group;
+  /** The node it currently hangs from. */
+  bone: string;
+  /** Its own attach point (a weapon's carry point). */
+  home: string;
+  /** Where a weapon goes when it is held. */
+  hand?: string;
+  /** A node the user mounted it on, which wins over home and hand. */
+  override: string;
+}
 
 interface Equipped {
   item: ItemRecord;
@@ -22,7 +35,9 @@ interface Equipped {
   /** Keys this item added to `nodes` (extra bones), removed again with it. */
   addedNodes: string[];
   /** Static items: a group per attached model, parented to a bone. Its transform is the item's offset. */
-  mounts: { mount: Group; bone: string; home: string }[];
+  mounts: Mount[];
+  /** How a weapon is held (automatic follows the clip). */
+  hold?: HoldMode;
   /** Why the item is switched off (the user hid it). Off items also release their body parts. */
   off: number;
   userHidden: boolean;
@@ -74,6 +89,8 @@ export class CharacterRig {
   /** The eye colours in effect (the face's iris regions); without any the whole body follows the skin. */
   private eyeColors: TintColors | null = null;
   private readonly face: FaceAnimator;
+  /** Whether the current clip holds weapons (a combat clip). */
+  private drawn = false;
 
   private constructor(gender: 0 | 1, body: Object3D) {
     this.gender = gender;
@@ -114,6 +131,12 @@ export class CharacterRig {
     const equipped = item ? this.equipped.get(item.id) : undefined;
     const bodyFace = this.bodyParts.get(FACE_SLOT);
     this.face.setTargets(equipped && !equipped.userHidden ? equipped.objects : bodyFace ? [bodyFace] : []);
+  }
+
+  /** Bring everything the clip drives in line with it: the face sequence, and weapons held during combat clips. */
+  followClip(clip: string, seconds: number, expression?: FaceExpression) {
+    this.setWeaponsDrawn(drawsWeapons(clip));
+    this.updateFace(clip, seconds, expression);
   }
 
   updateFace(clip: string, seconds: number, expression?: FaceExpression) {
@@ -181,8 +204,35 @@ export class CharacterRig {
     const eq = this.equipped.get(itemId);
     if (!eq) return;
     for (const m of eq.mounts) {
-      if (!this.place(m.mount, bone || m.home, eq) && bone) this.place(m.mount, m.home, eq);
+      m.override = bone;
+      this.placeMount(eq, m);
     }
+  }
+
+  /** Whether weapons are in the hand (a combat clip) or on their carry points. */
+  setWeaponsDrawn(drawn: boolean) {
+    if (drawn === this.drawn) return;
+    this.drawn = drawn;
+    for (const eq of this.equipped.values()) for (const m of eq.mounts) if (m.hand) this.placeMount(eq, m);
+  }
+
+  /** How an item is held: following the clip, always in the hand or always carried. */
+  setHold(itemId: string, mode: HoldMode | undefined) {
+    const eq = this.equipped.get(itemId);
+    if (!eq || eq.hold === mode) return;
+    eq.hold = mode;
+    for (const m of eq.mounts) if (m.hand) this.placeMount(eq, m);
+  }
+
+  /** Whether an item is a weapon that can move between its carry point and a hand. */
+  isHoldable(itemId: string): boolean {
+    return this.equipped.get(itemId)?.mounts.some((m) => !!m.hand) ?? false;
+  }
+
+  /** The bone a mount belongs on now: the user's choice, else the hand while held, else its own. */
+  private placeMount(eq: Equipped, m: Mount) {
+    const target = m.override || (m.hand && inHand(eq.hold, this.drawn) ? m.hand : m.home);
+    if (!this.place(m.mount, target, eq) && target !== m.home) this.place(m.mount, m.home, eq);
   }
 
   /** Show or hide an item. A hidden item also gives its body parts back. */
@@ -304,8 +354,17 @@ export class CharacterRig {
       if (skinned.length) {
         this.retargetSkinned(skinned, eq);
       } else {
-        const asset = group.find((a) => a.targetnode) ?? group[0];
-        this.attachStatic(object, asset.targetnode, eq);
+        // One model can serve several attach points (a pair of knuckles, one per hand): each gets its own copy.
+        const seen = new Set<string>();
+        const points = group.filter((a) => {
+          const key = `${a.targetnode}|${handNode(a) ?? ''}`;
+          if (!a.targetnode || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        (points.length ? points : [group[0]]).forEach((asset, k) =>
+          this.attachStatic(k === 0 ? object : object.clone(), asset, eq)
+        );
       }
     });
     return eq;
@@ -403,7 +462,8 @@ export class CharacterRig {
    * transform (its node sits where the item's file puts it relative to the attach point); the mount group around
    * it carries the user's offset.
    */
-  private attachStatic(object: Object3D, targetNode: string, eq: Equipped) {
+  private attachStatic(object: Object3D, asset: ItemAsset, eq: Equipped) {
+    const targetNode = asset.targetnode;
     const itemRoot = findByName(object, 'Scene Root') ?? object;
     // The item's own node already carries the same local transform the hidden part had.
     itemRoot.position.set(0, 0, 0);
@@ -411,10 +471,11 @@ export class CharacterRig {
     itemRoot.scale.set(1, 1, 1);
     const mount = new Group();
     mount.add(itemRoot);
-    eq.mounts.push({ mount, bone: targetNode, home: targetNode });
+    const entry: Mount = { mount, bone: targetNode, home: targetNode, hand: handNode(asset), override: '' };
+    eq.mounts.push(entry);
     eq.objects.push(mount);
-    if (!this.place(mount, targetNode, eq))
-      console.warn(`No attach node "${targetNode}" on the body for ${eq.item.name}`);
+    if (!this.resolve(targetNode)) console.warn(`No attach node "${targetNode}" on the body for ${eq.item.name}`);
+    this.placeMount(eq, entry);
   }
 
   /** Parent a mount to a bone. A hidden body part (the default hair) cannot be the parent or the item would vanish with it. */

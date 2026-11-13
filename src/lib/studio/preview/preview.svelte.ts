@@ -1,49 +1,20 @@
-import type { AnimationClip, Object3D } from 'three';
-import { AnimationPlayer } from '../../assets/animation.js';
-import { embeddedClips, fetchBodyClips, idleClip } from '../../assets/clips.js';
-import { instantiate, loadClips } from '../../assets/loader.js';
-import { bodyClipDir } from '../../assets/urls.js';
-import { eyeTint, getItem, itemTint, skinTint } from '../../entities/character/build.js';
-import { CharacterRig } from '../../entities/character/rig.js';
-import type { FaceExpression } from '../../entities/character/expressions.js';
-import type { ChannelIndexes } from '../../entities/character/tint.js';
+import type { Object3D } from 'three';
+import { restoreEntity } from '../../entities/registry.js';
+import { RiggedModel } from '../../entities/rigged-model.svelte.js';
+import type { Entity } from '../../entities/types.js';
 import { buildMap, type BuiltMap } from '../../maps/instancing.js';
-import { DEFAULT_EYE, DEFAULT_SKIN } from '../../entities/character/appearance.js';
-import type { ClipInfo, ItemRecord, MapData, MapEnvironment } from '../../types.js';
-
-/** An item to wear in a preview: its palette row and optional per-channel picks. */
-export interface PreviewItem {
-  id: string;
-  color?: number;
-  channels?: ChannelIndexes;
-}
+import { SceneRuntime } from '../../scene/runtime.svelte.js';
+import type { ClipInfo, MapData, MapEnvironment } from '../../types.js';
+import { previewEntities, type EntitySource } from './entities.js';
 
 /** What the preview pane shows. */
-export type PreviewSource =
-  | { kind: 'model'; glb: string; scale?: number; clip?: string }
-  | { kind: 'map'; id: string }
-  | {
-      kind: 'character';
-      gender: 0 | 1;
-      skin?: number;
-      eye?: number;
-      expression?: FaceExpression;
-      items: PreviewItem[];
-      clip?: string;
-    }
-  | {
-      kind: 'item';
-      item: ItemRecord;
-      gender: 0 | 1;
-      color?: number;
-      channels?: ChannelIndexes;
-      /** The character the item is tried on (its skin, eyes and what it already wears); a bare body when omitted. */
-      base?: { skin: number; eye?: number; expression?: FaceExpression; items: PreviewItem[] };
-    };
+export type PreviewSource = EntitySource | { kind: 'map'; id: string };
 
 /**
- * Loads one thing at a time into an object the preview stage draws, with its animation and status. A newer
- * `show` supersedes an older one (a late result is thrown away); `dispose` releases everything.
+ * Loads one thing at a time into an object the preview stage draws, with its animation and status. Models,
+ * characters and items are scene entities in a small scene of the preview's own, so they render, dress and animate
+ * exactly as in the scene. A newer `show` supersedes an older one (a late result is thrown away); `dispose`
+ * releases everything.
  */
 export class PreviewController {
   /** What was last asked to be shown (null: nothing), so a clip picker can preview the same thing on its own. */
@@ -61,18 +32,21 @@ export class PreviewController {
   /** Backdrop and fog of a previewed map. */
   environment = $state.raw<MapEnvironment | null>(null);
 
-  clips = $state.raw<ClipInfo[]>([]);
   clip = $state('');
   playing = $state(false);
   loop = $state(true);
 
   private gen = 0;
-  private player: AnimationPlayer | null = null;
-  private rig: CharacterRig | null = null;
+  private runtime = $state.raw<SceneRuntime | null>(null);
+  /** The entity whose clips play: the model or the character. */
+  private main = $state.raw<RiggedModel | null>(null);
+  private entities: Entity[] = [];
+  private framed = false;
   private map: BuiltMap | null = null;
-  private embedded: AnimationClip[] = [];
-  private bodyGender: 0 | 1 | null = null;
-  private expression: FaceExpression | undefined;
+
+  get clips(): ClipInfo[] {
+    return this.main && this.runtime ? this.runtime.clipsOf(this.main.id) : [];
+  }
 
   /** Show a source, or nothing for null. */
   async show(source: PreviewSource | null) {
@@ -82,43 +56,47 @@ export class PreviewController {
     if (!source) return;
     this.status = 'Loading...';
     try {
-      switch (source.kind) {
-        case 'model':
-          await this.showModel(source, gen);
-          break;
-        case 'map':
-          await this.showMap(source, gen);
-          break;
-        case 'character':
-          await this.showCharacter(source, gen);
-          break;
-        case 'item':
-          await this.showItem(source, gen);
-          break;
-      }
+      if (source.kind === 'map') await this.showMap(source, gen);
+      else await this.showEntities(source, gen);
     } catch (e) {
       if (gen !== this.gen) return;
       this.object = null;
-      this.failed = true;
-      this.status = e instanceof Error ? e.message : String(e);
+      this.fail(e instanceof Error ? e.message : String(e));
     }
   }
 
-  private async showModel(s: Extract<PreviewSource, { kind: 'model' }>, gen: number) {
-    const loaded = await instantiate(s.glb);
-    if (gen !== this.gen) return;
-    if (s.scale && s.scale !== 1) loaded.object.scale.setScalar(s.scale);
-    this.embedded = loaded.animations;
-    this.player = new AnimationPlayer(loaded.object);
-    this.clips = embeddedClips(loaded.animations);
-    this.object = loaded.object;
-    this.frameToken++;
-    this.status = '';
-    const start = this.clips.some((c) => c.name === s.clip) ? s.clip : (idleClip(this.clips) ?? this.clips[0]?.name);
-    if (start) await this.play(start);
+  private fail(message: string) {
+    this.failed = true;
+    this.status = message;
   }
 
-  private async showMap(s: Extract<PreviewSource, { kind: 'map' }>, gen: number) {
+  private async showEntities(source: EntitySource, gen: number) {
+    const json = await previewEntities(source);
+    if (gen !== this.gen) return;
+    const entities = json.map((input) => restoreEntity(input));
+    const main = entities[0];
+    if (!(main instanceof RiggedModel)) throw new Error('Nothing to preview');
+    const runtime = new SceneRuntime();
+    runtime.hooks = {
+      // A model without a clip gets its idle one, as in the scene.
+      defaultClip: (id, clip) => {
+        if (gen === this.gen && id === main.id) void this.play(clip);
+      },
+      error: (message) => {
+        if (gen === this.gen) this.fail(message);
+      }
+    };
+    main.loop = this.loop;
+    this.entities = entities;
+    this.main = main;
+    this.runtime = runtime;
+    this.clip = main.clip ?? '';
+    this.playing = !!main.clip;
+    runtime.sync(entities);
+    this.object = runtime.root;
+  }
+
+  private async showMap(s: { id: string }, gen: number) {
     this.isMap = true;
     const res = await fetch(`/api/maps/${s.id}`);
     if (!res.ok) throw new Error(`Map ${s.id}: ${res.status}`);
@@ -150,127 +128,56 @@ export class PreviewController {
     if (failed) this.status = `${failed} models failed to load`;
   }
 
-  private async showCharacter(s: Extract<PreviewSource, { kind: 'character' }>, gen: number) {
-    const rig = await CharacterRig.create(
-      s.gender,
-      await skinTint(s.skin ?? DEFAULT_SKIN),
-      await eyeTint(s.eye ?? DEFAULT_EYE)
-    );
-    if (gen !== this.gen) return rig.dispose();
-    this.attachRig(rig, s.gender);
-    this.expression = s.expression;
-    this.frameToken++;
-    this.status = '';
-    if (!(await this.wear(rig, s.items, gen))) return;
-    void this.loadBodyClips(s.gender, gen, s.clip ?? 'idle_a');
-  }
-
-  /** Put items on a rig in order; false when a newer `show` took over meanwhile. */
-  private async wear(rig: CharacterRig, items: PreviewItem[], gen: number): Promise<boolean> {
-    const records = await Promise.all(items.map((i) => getItem(i.id)));
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
-      if (!record) continue;
-      if (gen !== this.gen) return false;
-      await rig.equip(record, await itemTint(record, items[i].color, items[i].channels)).catch(() => undefined);
-    }
-    return gen === this.gen;
-  }
-
-  private async showItem(s: Extract<PreviewSource, { kind: 'item' }>, gen: number) {
-    const rig = await CharacterRig.create(
-      s.gender,
-      await skinTint(s.base?.skin ?? DEFAULT_SKIN),
-      await eyeTint(s.base?.eye ?? DEFAULT_EYE)
-    );
-    if (gen !== this.gen) return rig.dispose();
-    this.attachRig(rig, s.gender);
-    this.expression = s.base?.expression;
-    this.frameToken++;
-    this.status = '';
-    // What the character already wears first; the new item then replaces whatever shares its slot.
-    if (s.base && !(await this.wear(rig, s.base.items, gen))) return;
-    try {
-      await rig.equip(s.item, await itemTint(s.item, s.color, s.channels));
-    } catch (e) {
-      if (gen !== this.gen) return;
-      this.failed = true;
-      this.status = e instanceof Error ? e.message : String(e);
-      return;
-    }
-    if (gen !== this.gen) return;
-    void this.loadBodyClips(s.gender, gen, 'idle_a');
-  }
-
-  private attachRig(rig: CharacterRig, gender: 0 | 1) {
-    this.rig = rig;
-    this.bodyGender = gender;
-    this.player = new AnimationPlayer(rig.root);
-    this.object = rig.root;
-  }
-
-  private async loadBodyClips(gender: 0 | 1, gen: number, start: string) {
-    try {
-      const clips = await fetchBodyClips(gender);
-      if (gen !== this.gen) return;
-      this.clips = clips;
-      const first = clips.some((c) => c.name === start) ? start : idleClip(clips);
-      if (first) await this.play(first);
-    } catch {
-      // Without clips the pose just stays the bind pose.
-    }
-  }
-
+  /** Play a clip of the model or character ('' stops). */
   async play(name: string) {
-    const player = this.player;
-    if (!player) return;
-    if (!name) {
-      player.stop();
-      this.playing = false;
-      this.clip = '';
-      return;
-    }
-    const gen = this.gen;
-    let clip: AnimationClip | undefined;
-    if (this.rig && this.bodyGender !== null) {
-      clip = (await loadClips(`${bodyClipDir(this.bodyGender)}/${name}.glb`).catch(() => []))[0];
-    } else {
-      clip = this.embedded.find((c) => c.name === name);
-    }
-    if (gen !== this.gen || this.player !== player || !clip) return;
-    player.play(clip, this.loop);
+    const main = this.main;
+    if (!main || !this.runtime) return;
+    main.loop = this.loop;
+    main.set({ clip: name || undefined, freeze: undefined });
+    this.runtime.sync(this.entities);
     this.clip = name;
-    this.playing = true;
+    this.playing = !!name;
   }
 
   togglePlay() {
-    if (!this.player?.clip) return;
-    if (this.playing) this.player.pause();
-    else this.player.resume();
+    const player = this.main?.player;
+    if (!player?.clip) return;
+    if (this.playing) player.pause();
+    else player.resume();
     this.playing = !this.playing;
   }
 
   setLoop(loop: boolean) {
     this.loop = loop;
-    if (this.clip) void this.play(this.clip);
+    if (!this.main) return;
+    this.main.loop = loop;
+    if (this.clip) {
+      void this.main.playClip();
+      this.playing = true;
+    }
   }
 
   /** Call every frame. */
   update(delta: number) {
-    this.player?.update(delta);
-    this.rig?.updateFace(this.player?.clip?.name ?? '', this.player?.time ?? 0, this.expression);
+    const runtime = this.runtime;
+    if (!runtime || !this.main) return;
+    runtime.update(delta);
+    // Frame the camera once the model (or the body) is in.
+    if (!this.framed && runtime.boundsOf(this.main.id)) {
+      this.framed = true;
+      this.frameToken++;
+      if (!this.failed) this.status = '';
+    }
   }
 
   private release() {
-    this.player?.dispose();
-    this.player = null;
-    this.rig?.dispose();
-    this.rig = null;
+    this.runtime?.dispose();
+    this.runtime = null;
+    this.main = null;
+    this.entities = [];
+    this.framed = false;
     this.map?.dispose();
     this.map = null;
-    this.bodyGender = null;
-    this.expression = undefined;
-    this.embedded = [];
     this.object = null;
     this.status = '';
     this.failed = false;
@@ -278,7 +185,6 @@ export class PreviewController {
     this.facts = '';
     this.isMap = false;
     this.environment = null;
-    this.clips = [];
     this.clip = '';
     this.playing = false;
   }

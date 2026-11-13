@@ -210,6 +210,13 @@ export class SceneRuntime {
     return item instanceof ItemEntity && !!rig && rig.isEquipped(item.itemId) && rig.mountsOf(item.itemId).length === 0;
   }
 
+  isHoldable(itemId: string): boolean {
+    void this.version;
+    const item = this.byId.get(itemId);
+    const rig = item?.parentId ? this.rigOf(item.parentId) : null;
+    return item instanceof ItemEntity && !!rig && rig.isHoldable(item.itemId);
+  }
+
   defaultBoneOf(itemId: string): string {
     void this.version;
     const item = this.byId.get(itemId);
@@ -440,7 +447,7 @@ export class SceneRuntime {
     for (const id of members) {
       const entity = this.byId.get(id);
       if (entity instanceof CharacterEntity && entity.rig) {
-        entity.rig.updateFace(entity.player?.clip?.name ?? '', entity.player?.time ?? 0, entity.expression);
+        entity.rig.followClip(entity.player?.clip?.name ?? '', entity.player?.time ?? 0, entity.expression);
         await entity.rig.faceReady();
       }
     }

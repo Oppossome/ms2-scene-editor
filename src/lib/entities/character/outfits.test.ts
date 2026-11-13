@@ -70,6 +70,21 @@ describe('channel picks in snapshots', () => {
   });
 });
 
+describe('weapon hold modes in snapshots', () => {
+  it('keeps a valid hold mode and drops anything else', () => {
+    const parsed = parseSnapshot({
+      version: 1,
+      gender: 0,
+      skin: 0,
+      items: [
+        { id: '5', hold: 'hand' },
+        { id: '6', hold: 'sideways' }
+      ]
+    });
+    expect(parsed?.items).toEqual([{ id: '5', hold: 'hand' }, { id: '6' }]);
+  });
+});
+
 describe('storage helpers', () => {
   it('saves, lists and deletes named outfits, ignoring corrupt entries', () => {
     const s = new MemoryStorage();

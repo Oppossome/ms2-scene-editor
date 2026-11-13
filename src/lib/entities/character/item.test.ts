@@ -34,4 +34,20 @@ describe('ItemEntity controls', () => {
       1
     );
   });
+
+  it('offers a hold mode for weapons only and saves it', () => {
+    const item = new ItemEntity();
+    item.set({ itemId: '13200087', slots: ['RH'], parentId: 'p' });
+    const context = controlContext(item, { parent: new CharacterEntity({ id: 'p' }) });
+    expect(item.controls(context).find((control) => control.key === 'hold')).toBeUndefined();
+    const weapon = { ...context, holdable: true };
+    const row = controlRow(weapon, 'hold');
+    expect(row).toMatchObject({ value: '', section: 'Attachment' });
+    if (row.type !== 'enum') throw new Error('expected an enum row');
+    expect(row.edit('hand')).toEqual({ hold: 'hand' });
+    expect(row.edit('')).toEqual({ hold: undefined });
+    item.set({ hold: 'carry' });
+    expect(item.hold).toBe('carry');
+    expect(item.toJSON()).toMatchObject({ hold: 'carry' });
+  });
 });

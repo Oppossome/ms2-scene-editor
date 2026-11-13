@@ -16,6 +16,7 @@
   import PaletteRow from '../controls/PaletteRow.svelte';
   import { PreviewController, type PreviewSource } from '../preview/preview.svelte.js';
   import PreviewStage from '../preview/PreviewStage.svelte';
+  import { sceneEntities } from '../preview/entities.js';
   import Splitter from '../controls/Splitter.svelte';
 
   let { studio }: { studio: Studio } = $props();
@@ -130,13 +131,7 @@
   const worn = $derived(new Set(target ? store.itemsOf(target.id).map((n) => n.itemId) : []));
   const item = $derived(tab === 'items' ? (selected as ItemRecord | null) : null);
   // The character the item is tried on: what it wears now, as a string so unrelated scene edits do not reload the preview.
-  const baseKey = $derived(
-    target
-      ? (({ skin, eye, expression, items }) => JSON.stringify({ skin, eye, expression, items }))(
-          target.captureOutfit(store.itemsOf(target.id))
-        )
-      : ''
-  );
+  const baseKey = $derived(target ? JSON.stringify(sceneEntities(target, store.itemsOf(target.id))) : '');
   const into = $derived(
     tab === 'items' && target
       ? [target.name, studio.insertBone?.replace(/_/g, ' ')].filter(Boolean).join(' / ')

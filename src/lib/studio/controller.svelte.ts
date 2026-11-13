@@ -287,7 +287,8 @@ export class Studio {
           name: record.name,
           slots: record.slots,
           color: entry.color,
-          channelColors: entry.channels
+          channelColors: entry.channels,
+          hold: entry.hold
         });
       }
     });

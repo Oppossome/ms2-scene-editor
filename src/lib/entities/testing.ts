@@ -10,6 +10,7 @@ export function controlContext(node: Entity, overrides: Partial<PropContext> = {
     bones: [],
     defaultBone: '',
     skinned: false,
+    holdable: false,
     palette: 0,
     channels: [true, true],
     ...overrides

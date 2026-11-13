@@ -87,7 +87,7 @@
       const controller = new PreviewController();
       own = controller;
       const s = source;
-      void controller.show(s.kind === 'model' || s.kind === 'character' ? { ...s, clip: value || undefined } : s);
+      void controller.show(s.kind === 'map' || s.kind === 'item' ? s : { ...s, clip: value || undefined });
     }
     open = true;
     await tick();

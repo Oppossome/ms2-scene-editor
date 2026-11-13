@@ -14,10 +14,13 @@ vi.mock('../../assets/loader.js', () => ({
       head.name = 'Bip01_Head';
       const hand = new Object3D();
       hand.name = 'Bip01_R_Hand';
+      const points = ['Weapon_Hand_R_Point', 'Weapon_Hand_L_Point', 'Weapon_Side_L_Point', 'Weapon_Back_B_Point'].map(
+        (name) => Object.assign(new Object3D(), { name })
+      );
       const hair = new Mesh();
       hair.name = 'HR';
       head.add(hair);
-      hip.add(head, hand);
+      hip.add(head, hand, ...points);
       root.add(hip);
       return { object: root, animations: [] };
     }
@@ -77,6 +80,11 @@ const item = (id: string, assets: ItemAsset[]): ItemRecord => ({
 const hatA = item('1', [asset('CP', 'hat-a.glb')]);
 const hair = item('3', [asset('HR', 'hair.glb', { replace: true })]);
 const sword = item('4', [asset('RH', 'sword.glb', { targetnode: 'Bip01 R Hand' })]);
+const longsword = item('5', [asset('RH', 'longsword.glb', { targetnode: 'Weapon_Side_L_Point' })]);
+const knuckles = item('6', [
+  asset('RH', 'knuckle.glb', { targetnode: 'Weapon_Back_B_Point', attachnode: 'Weapon_Hand_R_Point' }),
+  asset('LH', 'knuckle.glb', { targetnode: 'Weapon_Back_B_Point', attachnode: 'Weapon_Hand_L_Point' })
+]);
 
 const mountsUnder = (rig: Rig, id: string) => rig.mountsOf(id).map((m) => m.parent?.name);
 
@@ -108,6 +116,67 @@ describe('CharacterRig items', () => {
     expect(mountsUnder(rig, '4')).toEqual(['Bip01_R_Hand']);
     rig.mountOn('4', 'No such bone');
     expect(mountsUnder(rig, '4')).toEqual(['Bip01_R_Hand']);
+  });
+
+  it('moves weapons between their carry point and the hand of their slot', async () => {
+    const rig = await CharacterRig.create(1);
+    await rig.equip(longsword);
+    expect(rig.isHoldable('5')).toBe(true);
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Side_L_Point']);
+    rig.setWeaponsDrawn(true);
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Hand_R_Point']);
+    rig.setWeaponsDrawn(false);
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Side_L_Point']);
+    expect(rig.defaultBoneOf('5')).toBe('Weapon_Side_L_Point');
+  });
+
+  it('puts weapons worn during a combat clip straight into the hand', async () => {
+    const rig = await CharacterRig.create(1);
+    rig.setWeaponsDrawn(true);
+    await rig.equip(longsword);
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Hand_R_Point']);
+  });
+
+  it('gives each hand its own copy of a paired weapon', async () => {
+    const rig = await CharacterRig.create(1);
+    await rig.equip(knuckles);
+    expect(mountsUnder(rig, '6')).toEqual(['Weapon_Back_B_Point', 'Weapon_Back_B_Point']);
+    rig.setWeaponsDrawn(true);
+    expect(mountsUnder(rig, '6')).toEqual(['Weapon_Hand_R_Point', 'Weapon_Hand_L_Point']);
+  });
+
+  it('keeps a weapon on the bone the user chose and follows the hold mode', async () => {
+    const rig = await CharacterRig.create(1);
+    await rig.equip(longsword);
+    rig.setHold('5', 'hand');
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Hand_R_Point']);
+    rig.setWeaponsDrawn(true);
+    rig.setHold('5', 'carry');
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Side_L_Point']);
+    rig.setHold('5', undefined);
+    rig.mountOn('5', 'Bip01 Head');
+    rig.setWeaponsDrawn(false);
+    rig.setWeaponsDrawn(true);
+    expect(mountsUnder(rig, '5')).toEqual(['Bip01_Head']);
+    rig.mountOn('5', '');
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Hand_R_Point']);
+  });
+
+  it('holds weapons while following a combat clip and carries them otherwise', async () => {
+    const rig = await CharacterRig.create(1);
+    await rig.equip(longsword);
+    rig.followClip('sword_attack_01_a', 0);
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Hand_R_Point']);
+    rig.followClip('idle_a', 0);
+    expect(mountsUnder(rig, '5')).toEqual(['Weapon_Side_L_Point']);
+  });
+
+  it('does not treat hats as weapons', async () => {
+    const rig = await CharacterRig.create(1);
+    await rig.equip(hatA);
+    rig.setWeaponsDrawn(true);
+    expect(rig.isHoldable('1')).toBe(false);
+    expect(mountsUnder(rig, '1')).toEqual(['Bip01_Head']);
   });
 
   it('hides and shows an item together with its body parts', async () => {
@@ -178,7 +247,15 @@ describe('CharacterRig.boneTree', () => {
     await rig.equip(hatA);
     const tree = rig.boneTree();
     const names = (list: typeof tree): string[] => list.flatMap((b) => [b.name, ...names(b.children)]);
-    expect(names(tree)).toEqual(['Bip01', 'Bip01_Head', 'Bip01_R_Hand']);
+    expect(names(tree)).toEqual([
+      'Bip01',
+      'Bip01_Head',
+      'Bip01_R_Hand',
+      'Weapon_Hand_R_Point',
+      'Weapon_Hand_L_Point',
+      'Weapon_Side_L_Point',
+      'Weapon_Back_B_Point'
+    ]);
   });
 });
 

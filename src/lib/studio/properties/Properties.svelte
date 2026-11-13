@@ -9,6 +9,7 @@
   import type { Studio } from '../controller.svelte.js';
   import PropertyEditor from './PropertyControl.svelte';
   import type { PreviewSource } from '../preview/preview.svelte.js';
+  import { sceneEntities } from '../preview/entities.js';
 
   let { studio }: { studio: Studio } = $props();
   const store = $derived(studio.store);
@@ -39,18 +40,10 @@
   const clipSource = $derived.by<PreviewSource | null>(() => {
     const node = selected;
     if (!node) return null;
-    if (node instanceof CharacterEntity) {
-      const { items, ...look } = node.captureOutfit(store.itemsOf(node.id));
-      return {
-        kind: 'character',
-        gender: look.gender,
-        skin: look.skin,
-        eye: look.eye,
-        expression: look.expression,
-        items
-      };
-    }
-    return node instanceof ModelEntity ? { kind: 'model', glb: node.glb, scale: node.scale[0] } : null;
+    // The picker previews a copy of the node (and what a character wears), rendered the way the scene renders it.
+    if (node instanceof CharacterEntity)
+      return { kind: 'entities', entities: sceneEntities(node, store.itemsOf(node.id)) };
+    return node instanceof ModelEntity ? { kind: 'entities', entities: sceneEntities(node) } : null;
   });
   const sections = $derived.by(() => {
     let controls: PropertyControl[];
@@ -76,6 +69,7 @@
         bones: parent?.type === 'character' ? runtime.boneNames(parent.id) : [],
         defaultBone: runtime.defaultBoneOf(selected.id),
         skinned: runtime.isSkinned(selected.id),
+        holdable: runtime.isHoldable(selected.id),
         palette: hasOwnColours(itemRecord) ? (itemRecord?.palette ?? 0) : 0,
         channels: itemRecord?.channels ?? [true, true]
       });
