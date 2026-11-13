@@ -179,6 +179,17 @@ describe('CharacterRig items', () => {
     expect(mountsUnder(rig, '1')).toEqual(['Bip01_Head']);
   });
 
+  it('keeps items that share a slot on together, the scene decides what is worn', async () => {
+    const rig = await CharacterRig.create(1);
+    const hatB = item('2', [asset('CP', 'hat-b.glb')]);
+    await rig.equip(hatA);
+    await rig.equip(hatB);
+    expect(rig.isEquipped('1') && rig.isEquipped('2')).toBe(true);
+    expect(rig.itemInSlot('CP')?.id).toBe('2');
+    rig.unequip('2');
+    expect(rig.itemInSlot('CP')?.id).toBe('1');
+  });
+
   it('hides and shows an item together with its body parts', async () => {
     const rig = await CharacterRig.create(1);
     const bodyHair = rig.bodyParts.get('HR')!;

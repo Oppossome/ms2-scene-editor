@@ -51,13 +51,3 @@ export function pickAssets(item: Pick<ItemRecord, 'assets'>, gender: Exclude<Gen
   }
   return out;
 }
-
-/** Equipped items that conflict with a new one: anything occupying one of the new item's slots. */
-export function conflictingItems(slotOwner: Map<string, string>, newSlots: string[], newItemId: string): string[] {
-  const out = new Set<string>();
-  for (const slot of newSlots) {
-    const owner = slotOwner.get(slot);
-    if (owner && owner !== newItemId) out.add(owner);
-  }
-  return [...out];
-}

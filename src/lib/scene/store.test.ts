@@ -66,6 +66,17 @@ describe('SceneState equipItem', () => {
     ).toEqual(['1', '2']);
   });
 
+  it('layers an item over what shares its slot when asked not to replace, but never duplicates an item', () => {
+    const { s, hero } = sceneWithHero();
+    s.equipItem(hero, item('5', ['CL']), true, false);
+    s.equipItem(hero, item('5', ['CL']), true, false);
+    expect(
+      items(s)
+        .filter((n) => n.parentId === hero)
+        .map((n) => n.itemId)
+    ).toEqual(['1', '2', '5']);
+  });
+
   it('replaces the same item (a colour change) instead of duplicating it', () => {
     const { s, hero } = sceneWithHero();
     s.equipItem(hero, { ...item('1', ['CP']), color: 4 });

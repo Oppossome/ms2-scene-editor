@@ -28,7 +28,10 @@ export type EntitySource =
       items: PreviewItem[];
       clip?: string;
     }
-  /** An item tried on `base` (entity JSON from `sceneEntities`), or on a bare body without one. */
+  /**
+   * An item tried on `base` (entity JSON from `sceneEntities`), or on a bare body without one. It replaces what
+   * shares its slots unless `replace` is false.
+   */
   | {
       kind: 'item';
       item: ItemRecord;
@@ -36,6 +39,7 @@ export type EntitySource =
       color?: number;
       channels?: ChannelIndexes;
       base?: EntityInput[];
+      replace?: boolean;
     }
   /** Entities copied from the scene (`sceneEntities`). */
   | { kind: 'entities'; entities: EntityInput[]; clip?: string };
@@ -107,12 +111,12 @@ export async function previewEntities(source: EntitySource): Promise<EntityInput
       const [root, ...worn] = source.base ?? [{ type: 'character', id: ROOT, name: 'Preview', ...IDENTITY }];
       const rootId = String(root.id);
       const next = { itemId: source.item.id, slots: source.item.slots };
-      // What the character wears first; the new item replaces whatever shares its slot.
-      const kept = worn.filter(
-        (item) =>
-          item.type !== 'item' ||
-          !replacesItem({ itemId: String(item.itemId), slots: Array.isArray(item.slots) ? item.slots : [] }, next)
-      );
+      // What the character wears first; the new item replaces the same item, and whatever shares its slot.
+      const kept = worn.filter((item) => {
+        if (item.type !== 'item') return true;
+        const wornItem = { itemId: String(item.itemId), slots: Array.isArray(item.slots) ? item.slots : [] };
+        return source.replace === false ? wornItem.itemId !== next.itemId : !replacesItem(wornItem, next);
+      });
       const tried = itemJson(source.item, rootId, worn.length, { color: source.color, channels: source.channels });
       return [{ ...root, gender: source.gender }, ...kept, tried];
     }

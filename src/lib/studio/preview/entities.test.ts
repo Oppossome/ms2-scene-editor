@@ -78,6 +78,22 @@ describe('previewEntities', () => {
     expect(list[2]).toMatchObject({ parentId: 'c', itemId: '13', color: 2 });
   });
 
+  it('layers a tried-on item over its slot when it should not replace', async () => {
+    const character = entity('c', 'character');
+    const worn = [entity('a', 'item', 'c', { itemId: '11', slots: ['RH'] })];
+    const base = sceneEntities(character, worn);
+    const layered = await previewEntities({
+      kind: 'item',
+      item: record('13', ['RH']),
+      gender: 1,
+      base,
+      replace: false
+    });
+    expect(layered.map((e) => e.id)).toEqual(['c', 'a', 'preview-item-1']);
+    const same = await previewEntities({ kind: 'item', item: record('11', ['RH']), gender: 1, base, replace: false });
+    expect(same.map((e) => e.id)).toEqual(['c', 'preview-item-1']);
+  });
+
   it('plays the asked clip on a scene copy and shows models at their scale', async () => {
     const npc = entity('n', 'npc', null, { glb: 'a.glb', clip: 'walk' });
     const [copy] = await previewEntities({ kind: 'entities', entities: sceneEntities(npc), clip: 'run' });

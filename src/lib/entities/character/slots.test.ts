@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyMeshesForSlot, conflictingItems, pickAssets } from './slots';
+import { bodyMeshesForSlot, pickAssets } from './slots';
 import type { ItemAsset } from '../../types';
 
 const asset = (slot: string, glb: string, gender: 0 | 1 | 2): ItemAsset => ({
@@ -36,18 +36,5 @@ describe('pickAssets', () => {
 
   it('returns nothing when no asset fits', () => {
     expect(pickAssets({ assets: [asset('CL', 'f.glb', 1)] }, 0)).toEqual([]);
-  });
-});
-
-describe('conflictingItems', () => {
-  it('lists owners of the new item slots once, excluding the item itself', () => {
-    const owners = new Map([
-      ['CL', 'dress'],
-      ['PA', 'dress'],
-      ['SH', 'boots']
-    ]);
-    expect(conflictingItems(owners, ['CL', 'PA'], 'coat')).toEqual(['dress']);
-    expect(conflictingItems(owners, ['CL'], 'dress')).toEqual([]);
-    expect(conflictingItems(owners, ['GL'], 'x')).toEqual([]);
   });
 });

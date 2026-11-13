@@ -273,12 +273,20 @@ export class SceneState {
     this.nodes = [...this.nodes, ...entities];
   }
 
-  /** Wear an item: a child item of the character. Items in the same slots (or the same item) are replaced. */
-  equipItem(characterId: string, item: NewItem, select = true): string {
+  /**
+   * Wear an item: a child item of the character. The same item is always replaced; items in the same slots are
+   * replaced too unless `replace` is false, which layers the new item over them.
+   */
+  equipItem(characterId: string, item: NewItem, select = true, replace = true): string {
     if (this.node(characterId)?.type !== 'character') return '';
     this.record();
     const kept = this.nodes.filter(
-      (n) => !(n instanceof ItemEntity && n.parentId === characterId && replacesItem(n, item))
+      (n) =>
+        !(
+          n instanceof ItemEntity &&
+          n.parentId === characterId &&
+          (replace ? replacesItem(n, item) : n.itemId === item.itemId)
+        )
     );
     const node = createEntity(itemSpec(item), characterId);
     this.nodes = this.insert(kept, node);

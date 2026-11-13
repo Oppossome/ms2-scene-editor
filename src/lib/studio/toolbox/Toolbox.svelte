@@ -186,7 +186,8 @@
           gender: itemTargetGender,
           color: itemColor,
           channels: itemChannels,
-          base: baseKey ? JSON.parse(baseKey) : undefined
+          base: baseKey ? JSON.parse(baseKey) : undefined,
+          replace: studio.replaceSameSlot
         };
     }
   });
@@ -287,12 +288,36 @@
         />
       {/key}
     {:else if tab === 'items'}
-      {#if target}<p class="hint">Previewed on {target.name}, with what it wears now.</p>{/if}
-      <div class="gender">
-        <button class:active={itemTargetGender === 1} disabled={!!target} onclick={() => (itemGender = 1)}
-          >Female</button
-        >
-        <button class:active={itemTargetGender === 0} disabled={!!target} onclick={() => (itemGender = 0)}>Male</button>
+      <div class="item-options">
+        {#if target}
+          <span class="on" title={`Previewed on ${target.name}, with what it wears now`}
+            >On <strong>{target.name}</strong></span
+          >
+        {:else}
+          <div class="seg" role="group" aria-label="Body to preview and insert on">
+            {#each [[1, 'Female'], [0, 'Male']] as const as [value, label] (value)}
+              <button
+                class:active={itemTargetGender === value}
+                aria-pressed={itemTargetGender === value}
+                onclick={() => (itemGender = value)}>{label}</button
+              >
+            {/each}
+          </div>
+        {/if}
+        <div class="seg" role="group" aria-label="Items in the same slot">
+          <button
+            class:active={studio.replaceSameSlot}
+            aria-pressed={studio.replaceSameSlot}
+            title="Take off what shares this item's slots"
+            onclick={() => (studio.replaceSameSlot = true)}>Replace</button
+          >
+          <button
+            class:active={!studio.replaceSameSlot}
+            aria-pressed={!studio.replaceSameSlot}
+            title="Wear this item over what shares its slots, e.g. a coat over a dress"
+            onclick={() => (studio.replaceSameSlot = false)}>Layer</button
+          >
+        </div>
       </div>
       <ItemBrowser
         gender={itemTargetGender}
@@ -428,13 +453,45 @@
     flex-direction: column;
     gap: 6px;
   }
-  .gender {
+  .item-options {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 12px;
   }
-  .gender button {
-    flex: 1;
-    padding: 3px;
+  .on {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  .on strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .seg {
+    flex: none;
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .seg button {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 2px 9px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .seg button + button {
+    border-left: 1px solid var(--border);
+  }
+  .seg button.active {
+    background: var(--accent);
+    color: #fff;
   }
   .outfits {
     list-style: none;

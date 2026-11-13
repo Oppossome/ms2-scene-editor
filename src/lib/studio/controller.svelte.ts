@@ -77,6 +77,8 @@ export class Studio {
   gizmoActive = false;
   /** Toolbox: insert at the scene root instead of under the selected node. */
   insertAtRoot = $state(false);
+  /** Whether a worn item takes off what shares its slots; off layers clothes (a coat over a dress...). */
+  replaceSameSlot = $state(true);
   /** Toolbox: height in pixels of the preview pane. */
   previewHeight = $state(260);
   /** The ground grid of the main viewport. */
@@ -343,14 +345,12 @@ export class Studio {
 
   /** Wear an item: it becomes a child of the character (optionally mounted on a bone). */
   commitItem(target: AddTarget, item: ItemRecord, color?: number, channelColors?: ChannelIndexes): string {
-    return this.store.equipItem(target.nodeId, {
-      itemId: item.id,
-      name: item.name,
-      slots: item.slots,
-      color,
-      channelColors,
-      attachBone: target.bone
-    });
+    return this.store.equipItem(
+      target.nodeId,
+      { itemId: item.id, name: item.name, slots: item.slots, color, channelColors, attachBone: target.bone },
+      true,
+      this.replaceSameSlot
+    );
   }
 
   saveOutfit(characterId: string, name: string): boolean {

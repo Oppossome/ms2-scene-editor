@@ -2,7 +2,7 @@ import { Group, Mesh, Object3D, PropertyBinding, Skeleton, SkinnedMesh } from 't
 import { instantiate } from '../../assets/loader.js';
 import { bodyModel } from '../../assets/urls.js';
 import type { ItemAsset, ItemRecord } from '../../types.js';
-import { bodyMeshesForSlot, conflictingItems, pickAssets } from './slots.js';
+import { bodyMeshesForSlot, pickAssets } from './slots.js';
 import { applyFaceTextures } from './face.js';
 import { FaceAnimator } from './face-animation.js';
 import type { FaceExpression } from './expressions.js';
@@ -74,8 +74,6 @@ export class CharacterRig {
   /** Body meshes by name; items with "replace" hide the ones of their slot. */
   readonly bodyParts = new Map<string, Object3D>();
   readonly equipped = new Map<string, Equipped>();
-  /** Slot -> id of the item occupying it. */
-  readonly slotOwner = new Map<string, string>();
   readonly skinRoot: Object3D;
   readonly body: Object3D;
   onChange?: () => void;
@@ -174,9 +172,11 @@ export class CharacterRig {
     return this.equipped.has(itemId);
   }
 
+  /** The item worn last in a slot (several can share one: the scene decides what is worn). */
   itemInSlot(slot: string): ItemRecord | undefined {
-    const id = this.slotOwner.get(slot);
-    return id ? this.equipped.get(id)?.item : undefined;
+    let found: ItemRecord | undefined;
+    for (const eq of this.equipped.values()) if (eq.slots.includes(slot)) found = eq.item;
+    return found;
   }
 
   /** Node of the body (bone, dummy or part) by name, whatever the spelling of spaces and case. */
@@ -275,7 +275,7 @@ export class CharacterRig {
     return { glbs, loaded };
   }
 
-  /** Put an item on, replacing anything that occupies the same slots. */
+  /** Put an item on. Items sharing its slots stay on: what a character wears is up to the scene. */
   async equip(item: ItemRecord, colors?: TintColors): Promise<void> {
     const token = (this.tokens.get(item.id) ?? 0) + 1;
     this.tokens.set(item.id, token);
@@ -288,12 +288,10 @@ export class CharacterRig {
     if (this.disposed || this.tokens.get(item.id) !== token) return;
 
     const slots = [...new Set(assets.map((a) => a.slot))];
-    for (const id of conflictingItems(this.slotOwner, slots, item.id)) this.unequip(id);
     if (this.equipped.has(item.id)) this.unequip(item.id);
 
     const eq = this.install(item, assets, glbs, loaded);
     this.equipped.set(item.id, eq);
-    for (const slot of slots) this.slotOwner.set(slot, item.id);
     if (slots.includes(FACE_SLOT)) this.refreshFace();
     this.onChange?.();
   }
@@ -302,15 +300,9 @@ export class CharacterRig {
     const eq = this.equipped.get(itemId);
     if (!eq) return;
     this.release(eq);
-    for (const slot of eq.slots) if (this.slotOwner.get(slot) === itemId) this.slotOwner.delete(slot);
     this.equipped.delete(itemId);
     if (eq.slots.includes(FACE_SLOT)) this.refreshFace();
     this.onChange?.();
-  }
-
-  unequipSlot(slot: string) {
-    const id = this.slotOwner.get(slot);
-    if (id) this.unequip(id);
   }
 
   dispose() {
