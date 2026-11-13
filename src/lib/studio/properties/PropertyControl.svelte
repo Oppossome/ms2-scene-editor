@@ -81,9 +81,10 @@
   {/if}
 {:else if row.type === 'palette'}
   <PaletteRow
-    palette={row.palette ?? 0}
+    palette={row.palette}
     value={row.value}
     channel={row.channel}
+    custom={row.custom}
     onpick={(value) => commit(row.edit(value))}
   />
 {:else if row.type === 'transport'}

@@ -3,7 +3,7 @@ import { DEFAULT_EYE, DEFAULT_SKIN } from '../entities/character/appearance.js';
 import { History } from './history.js';
 import { ONE, ZERO, canHaveChildren, type Vec3 } from '../entities/constants.js';
 import { SCENE_KEY } from './document.js';
-import type { ChannelIndexes } from '../entities/character/tint.js';
+import type { ChannelDyes, Dye } from '../entities/character/tint.js';
 import type { FaceExpression } from '../entities/character/expressions.js';
 import type { MapEnvironment } from '../types.js';
 import { canParent, cloneSubtree, deleteSubtree, uniqueName } from './tree.js';
@@ -31,8 +31,8 @@ export interface NewNode {
   eye?: number;
   expression?: FaceExpression;
   itemId?: string;
-  color?: number;
-  channelColors?: ChannelIndexes;
+  color?: Dye;
+  channelColors?: ChannelDyes;
   hold?: 'hand' | 'carry';
   slots?: string[];
   clip?: string;
@@ -47,8 +47,8 @@ export interface NewItem {
   itemId: string;
   name: string;
   slots: string[];
-  color?: number;
-  channelColors?: ChannelIndexes;
+  color?: Dye;
+  channelColors?: ChannelDyes;
   hold?: 'hand' | 'carry';
   attachBone?: string;
 }

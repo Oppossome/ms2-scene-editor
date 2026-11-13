@@ -4,7 +4,7 @@
   import AssetBrowser from '#lib/studio/toolbox/AssetBrowser.svelte';
   import ItemBrowser from '#lib/studio/toolbox/ItemBrowser.svelte';
   import { deleteNamed, loadSaved, type OutfitSnapshot } from '#lib/entities/character/outfits.js';
-  import type { ChannelIndexes } from '#lib/entities/character/tint.js';
+  import { shownChannelDye, type ChannelDyes, type Dye } from '#lib/entities/character/tint.js';
   import {
     CHANNEL_LABELS,
     editableChannels,
@@ -62,8 +62,8 @@
   let outfits = $state.raw<OutfitEntry[]>([]);
   let itemGender = $state<0 | 1>(1);
   /** Palette row chosen per item, and per-channel picks on top of it. */
-  let colorChoice = $state<Record<string, number>>({});
-  let channelChoice = $state<Record<string, ChannelIndexes>>({});
+  let colorChoice = $state<Record<string, Dye>>({});
+  let channelChoice = $state<Record<string, ChannelDyes>>({});
   let added = $state(0);
   let addedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -142,17 +142,17 @@
   /** Channels the game lets the player change on this item; a single one is just the colour set. */
   const editable = $derived(editableChannels(item?.channels ?? [true, true]));
 
-  function pickSet(index: number) {
+  function pickSet(dye: Dye) {
     if (!item) return;
-    colorChoice = { ...colorChoice, [item.id]: index };
+    colorChoice = { ...colorChoice, [item.id]: dye };
     // A new colour set starts over: every channel follows it again.
     const { [item.id]: _dropped, ...rest } = channelChoice;
     channelChoice = rest;
   }
 
-  function pickChannel(channel: PickChannel, index: number) {
+  function pickChannel(channel: PickChannel, dye: Dye) {
     if (!item) return;
-    channelChoice = { ...channelChoice, [item.id]: { ...channelChoice[item.id], [`ch${channel}`]: index } };
+    channelChoice = { ...channelChoice, [item.id]: { ...channelChoice[item.id], [`ch${channel}`]: dye } };
   }
 
   // ----- preview -----
@@ -366,7 +366,7 @@
     <div class="colors">
       <div class="color-row">
         {#if editable.length > 1}<span class="color-label">Colour set</span>{/if}
-        <PaletteRow palette={item.palette} value={itemColor ?? 0} onpick={pickSet} />
+        <PaletteRow palette={item.palette} value={itemColor ?? 0} custom onpick={pickSet} />
       </div>
       {#if editable.length > 1}
         {#each editable as channel (channel)}
@@ -375,7 +375,8 @@
             <PaletteRow
               palette={item.palette}
               {channel}
-              value={itemChannels?.[`ch${channel}` as const] ?? itemColor ?? 0}
+              value={shownChannelDye(itemColor, itemChannels?.[`ch${channel}` as const], channel) ?? 0}
+              custom
               onpick={(i) => pickChannel(channel, i)}
             />
           </div>

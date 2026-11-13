@@ -1,7 +1,7 @@
 import { getItem } from '../../entities/character/build.js';
 import { replacesItem } from '../../entities/character/item.svelte.js';
 import type { FaceExpression } from '../../entities/character/expressions.js';
-import type { ChannelIndexes } from '../../entities/character/tint.js';
+import type { ChannelDyes, Dye } from '../../entities/character/tint.js';
 import type { HoldMode } from '../../entities/character/weapons.js';
 import type { Entity, EntityInput } from '../../entities/types.js';
 import { omitUndefined } from '../../entities/validation.js';
@@ -10,8 +10,8 @@ import type { ItemRecord } from '../../types.js';
 /** An item to wear in a preview: its palette row and optional per-channel picks. */
 export interface PreviewItem {
   id: string;
-  color?: number;
-  channels?: ChannelIndexes;
+  color?: Dye;
+  channels?: ChannelDyes;
   hold?: HoldMode;
 }
 
@@ -36,8 +36,8 @@ export type EntitySource =
       kind: 'item';
       item: ItemRecord;
       gender: 0 | 1;
-      color?: number;
-      channels?: ChannelIndexes;
+      color?: Dye;
+      channels?: ChannelDyes;
       base?: EntityInput[];
       replace?: boolean;
     }

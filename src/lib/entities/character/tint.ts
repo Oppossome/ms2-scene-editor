@@ -30,43 +30,95 @@ export function paletteToTint(color: PaletteColor): TintColors {
 }
 
 /**
- * Palette rows the player picked per channel (indexes into the palette, i.e. `colorSN`). A channel without an entry
- * follows the item's base row; `ch0` is the main colour and `ch2` the detail/shade colour. The accent `ch1` is not
- * pickable (no item allows it), so it always comes from the base row.
+ * One dye: a palette row (an index into the palette, i.e. `colorSN`; the game's "Basic Colors") or a custom colour
+ * as lower-case `#rrggbb` (the game's "Custom" tab).
  */
-export interface ChannelIndexes {
-  ch0?: number;
-  ch2?: number;
+export type Dye = number | string;
+
+export const CUSTOM_DYE = /^#[0-9a-f]{6}$/;
+
+/**
+ * The detail/shade colour (ch2) of a custom colour set. The gear palettes shade ch2 to roughly 45% of ch0 in gamma
+ * space, so a custom main colour gets the same darkening.
+ */
+export function customShade(hex: string): string {
+  return (
+    '#' +
+    [1, 3, 5]
+      .map((i) =>
+        Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.45)
+          .toString(16)
+          .padStart(2, '0')
+      )
+      .join('')
+  );
+}
+
+/**
+ * Dyes the player picked per channel. A channel without an entry follows the item's colour set; `ch0` is the main
+ * colour and `ch2` the detail/shade colour. The accent `ch1` is not pickable (no item allows it), so it always comes
+ * from the colour set.
+ */
+export interface ChannelDyes {
+  ch0?: Dye;
+  ch2?: Dye;
 }
 
 export const CHANNEL_KEYS = ['ch0', 'ch2'] as const;
 export type ChannelKey = (typeof CHANNEL_KEYS)[number];
 
+const isDye = (v: unknown): v is Dye =>
+  (typeof v === 'number' && Number.isInteger(v) && v >= 0) || (typeof v === 'string' && CUSTOM_DYE.test(v));
+
 /** Validate untrusted JSON into channel picks; null when it holds nothing usable. */
-export function parseChannelIndexes(value: unknown): ChannelIndexes | null {
+export function parseChannelDyes(value: unknown): ChannelDyes | null {
   if (!value || typeof value !== 'object') return null;
-  const out: ChannelIndexes = {};
+  const out: ChannelDyes = {};
   for (const key of CHANNEL_KEYS) {
     const v = (value as Record<string, unknown>)[key];
-    if (typeof v === 'number' && Number.isInteger(v) && v >= 0) out[key] = v;
+    if (isDye(v)) out[key] = v;
   }
   return Object.keys(out).length ? out : null;
 }
 
 /**
- * The three tint colours for a palette: every channel takes its colour from the base row, except those the player
- * picked another row for (that row's colour *for that channel*). Unknown rows fall back to the base row, then row 0.
+ * The colour (ARGB or `#rrggbb`) a dye gives one channel; undefined for a palette row that does not exist. A custom
+ * colour set shades its detail channel; a custom pick for one channel is that exact colour.
+ */
+function dyeChannel(
+  palette: PaletteColor[],
+  dye: Dye | undefined,
+  key: 'ch0' | 'ch1' | 'ch2',
+  isSet: boolean
+): string | undefined {
+  if (typeof dye === 'string') return isSet && key === 'ch2' ? customShade(dye) : dye;
+  return dye === undefined ? undefined : palette[dye]?.[key];
+}
+
+/**
+ * The three tint colours for a palette: every channel takes its colour from the base dye (the colour set), except
+ * those the player dyed separately (a palette row's colour *for that channel*, or a custom colour). An unknown base
+ * row falls back to row 0, an unknown pick to the base.
  */
 export function tintFromPalette(
   palette: PaletteColor[],
-  base: number,
-  picks?: ChannelIndexes | null
+  base: Dye,
+  picks?: ChannelDyes | null
 ): TintColors | undefined {
-  const row = (i: number | undefined) => (i === undefined ? undefined : palette[i]);
-  const fallback = row(base) ?? palette[0];
-  if (!fallback) return undefined;
-  const colour = (key: ChannelKey) => argbToColor((row(picks?.[key]) ?? fallback)[key]);
-  return { c0: colour('ch0'), c1: argbToColor(fallback.ch1), c2: colour('ch2') };
+  const set = typeof base === 'string' || palette[base] ? base : palette.length ? 0 : undefined;
+  if (set === undefined) return undefined;
+  const colour = (key: 'ch0' | 'ch1' | 'ch2') =>
+    argbToColor(
+      (key === 'ch1' ? undefined : dyeChannel(palette, picks?.[key], key, false)) ??
+        dyeChannel(palette, set, key, true)!
+    );
+  return { c0: colour('ch0'), c1: colour('ch1'), c2: colour('ch2') };
+}
+
+/** The colour a channel row shows for its current dye, so a custom colour set displays its derived shade. */
+export function shownChannelDye(set: Dye | undefined, pick: Dye | undefined, channel: 0 | 2): Dye | undefined {
+  if (pick !== undefined) return pick;
+  return typeof set === 'string' && channel === 2 ? customShade(set) : set;
 }
 
 /**

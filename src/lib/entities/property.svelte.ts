@@ -3,6 +3,7 @@ import type { ClipInfo } from '../types.js';
 import type { Vec3 } from './constants.js';
 import type { Entity, EntityInput } from './types.js';
 import type { PickChannel } from './character/appearance.js';
+import type { Dye } from './character/tint.js';
 import { vectorSchema } from './validation.js';
 
 export interface PropContext {
@@ -34,14 +35,22 @@ export type PropertyControl =
       edit: (value: string) => EntityInput;
     })
   | (ControlBase & {
-      type: 'number' | 'palette';
+      type: 'number';
       value: number;
       step?: number;
       min?: number;
       max?: number;
-      palette?: number;
-      channel?: PickChannel;
       edit: (value: number) => EntityInput;
+    })
+  | (ControlBase & {
+      type: 'palette';
+      /** A palette row, or a custom `#rrggbb` colour; -1 for none. */
+      value: Dye;
+      palette: number;
+      channel?: PickChannel;
+      /** Offer a custom colour after the palette's swatches. */
+      custom?: boolean;
+      edit: (value: Dye) => EntityInput;
     })
   | (ControlBase & {
       type: 'vec3';

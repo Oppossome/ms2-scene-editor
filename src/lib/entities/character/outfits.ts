@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { issueText, indexSchema, numericId, omitUndefined } from '../validation.js';
-import { expressionSchema, channelsSchema, holdSchema } from './schemas.js';
+import { expressionSchema, channelsSchema, dyeSchema, holdSchema } from './schemas.js';
 
 /**
  * Saved outfits (localStorage): a reusable look (gender, skin, eyes, face, worn items), not scene state. A character
@@ -18,7 +18,7 @@ const outfitSchema = z
       z
         .object({
           id: numericId,
-          color: indexSchema.optional().catch(undefined),
+          color: dyeSchema.optional().catch(undefined),
           channels: channelsSchema.optional().catch(undefined),
           hold: holdSchema.optional().catch(undefined)
         })

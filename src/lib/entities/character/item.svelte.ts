@@ -4,11 +4,12 @@ import { BaseEntity } from '../base.svelte.js';
 import { ZERO, ONE } from '../constants.js';
 import { CharacterEntity } from './character.svelte.js';
 import { editableChannels } from './appearance.js';
-import { channelsSchema, holdSchema } from './schemas.js';
+import { channelsSchema, dyeSchema, holdSchema } from './schemas.js';
 import type { EntityInput } from '../types.js';
 import { EntityProperty, type PropContext, type PropertyControl } from '../property.svelte.js';
 import type { RenderContext } from '../render-context.js';
-import { numericId, indexSchema } from '../validation.js';
+import { numericId } from '../validation.js';
+import { shownChannelDye, type Dye } from './tint.js';
 
 /** Whether wearing `next` takes `worn` off: it is the same item or shares one of its slots. */
 export function replacesItem(
@@ -48,7 +49,7 @@ export class ItemEntity extends BaseEntity {
   );
   readonly colorProperty = this.define(
     'color',
-    new EntityProperty(indexSchema.optional(), undefined, (value, ctx) =>
+    new EntityProperty(dyeSchema.optional(), undefined, (value, ctx) =>
       ctx.palette
         ? {
             key: 'color',
@@ -57,6 +58,7 @@ export class ItemEntity extends BaseEntity {
             type: 'palette',
             value: value ?? -1,
             palette: ctx.palette,
+            custom: true,
             edit: (color) => this.chooseColor(color)
           }
         : null
@@ -103,7 +105,7 @@ export class ItemEntity extends BaseEntity {
   private mount: Group | null = null;
 
   /** Picking a colour set starts over: every channel follows it again. */
-  chooseColor(color: number): EntityInput {
+  chooseColor(color: Dye): EntityInput {
     return { color, channelColors: undefined };
   }
 
@@ -174,9 +176,10 @@ export class ItemEntity extends BaseEntity {
           label: channel === 0 ? 'Main' : 'Detail',
           section: 'Appearance',
           type: 'palette',
-          value: this.channelColors?.[`ch${channel}`] ?? this.color ?? -1,
+          value: shownChannelDye(this.color, this.channelColors?.[`ch${channel}`], channel) ?? -1,
           palette: ctx.palette,
           channel,
+          custom: true,
           edit: (value) => ({ channelColors: { ...this.channelColors, [`ch${channel}`]: value } })
         });
       }

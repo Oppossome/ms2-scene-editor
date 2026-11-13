@@ -1,5 +1,5 @@
 import type { ItemRecord, PaletteColor } from '../../types.js';
-import { paletteToTint, tintFromPalette, type ChannelIndexes, type TintColors } from './tint.js';
+import { paletteToTint, tintFromPalette, type ChannelDyes, type Dye, type TintColors } from './tint.js';
 
 import { SKIN_PALETTE, EYE_PALETTE } from './appearance.js';
 
@@ -31,8 +31,8 @@ export const eyeTint = (index: number) => paletteTint(EYE_PALETTE, index);
  */
 export async function itemTint(
   item: ItemRecord,
-  index?: number,
-  picks?: ChannelIndexes | null
+  index?: Dye,
+  picks?: ChannelDyes | null
 ): Promise<TintColors | undefined> {
   if (!item.palette) return undefined;
   const colors = await getPalette(item.palette);

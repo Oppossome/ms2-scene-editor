@@ -5,7 +5,9 @@ import {
   applyTint,
   getTintInfo,
   setTintMask,
-  parseChannelIndexes,
+  customShade,
+  shownChannelDye,
+  parseChannelDyes,
   tintFromPalette,
   tintPixel
 } from './tint';
@@ -124,15 +126,44 @@ describe('tintFromPalette', () => {
     expect(hex(tintFromPalette(palette, 42)!.c0)).toBe('aa0000');
     expect(tintFromPalette([], 0)).toBeUndefined();
   });
+
+  it('colours a custom colour set: main and accent exactly, the detail shaded from it', () => {
+    const c = tintFromPalette(palette, '#c86432')!;
+    expect([hex(c.c0), hex(c.c1), hex(c.c2)]).toEqual(['c86432', 'c86432', customShade('#c86432').slice(1)]);
+  });
+
+  it('uses a custom pick for one channel exactly, unshaded', () => {
+    const c = tintFromPalette(palette, 0, { ch0: '#123456', ch2: '#abcdef' })!;
+    expect([hex(c.c0), hex(c.c1), hex(c.c2)]).toEqual(['123456', '00aa00', 'abcdef']);
+    expect(hex(tintFromPalette(palette, '#ffffff', { ch2: 2 })!.c2)).toBe('070809');
+  });
 });
 
-describe('parseChannelIndexes', () => {
+describe('customShade', () => {
+  it('darkens each channel to about 45%, like the gear palettes', () => {
+    expect(customShade('#c86432')).toBe('#5a2d17');
+    expect(customShade('#000000')).toBe('#000000');
+  });
+});
+
+describe('shownChannelDye', () => {
+  it('shows the pick, else the set, with a custom set shaded on the detail row', () => {
+    expect(shownChannelDye(3, 5, 0)).toBe(5);
+    expect(shownChannelDye(3, undefined, 2)).toBe(3);
+    expect(shownChannelDye('#c86432', undefined, 0)).toBe('#c86432');
+    expect(shownChannelDye('#c86432', undefined, 2)).toBe('#5a2d17');
+    expect(shownChannelDye(undefined, undefined, 2)).toBeUndefined();
+  });
+});
+
+describe('parseChannelDyes', () => {
   it('keeps valid picks only', () => {
-    expect(parseChannelIndexes({ ch0: 3, ch2: 0, ch1: -1, extra: 5 })).toEqual({ ch0: 3, ch2: 0 });
-    expect(parseChannelIndexes({ ch0: 1.5, ch1: '2' })).toBeNull();
-    expect(parseChannelIndexes({ ch1: 2 })).toBeNull();
-    expect(parseChannelIndexes(null)).toBeNull();
-    expect(parseChannelIndexes('x')).toBeNull();
-    expect(parseChannelIndexes({})).toBeNull();
+    expect(parseChannelDyes({ ch0: 3, ch2: 0, ch1: -1, extra: 5 })).toEqual({ ch0: 3, ch2: 0 });
+    expect(parseChannelDyes({ ch0: '#a0b0c0', ch2: '#ABCDEF' })).toEqual({ ch0: '#a0b0c0' });
+    expect(parseChannelDyes({ ch0: 1.5, ch1: '2' })).toBeNull();
+    expect(parseChannelDyes({ ch1: 2 })).toBeNull();
+    expect(parseChannelDyes(null)).toBeNull();
+    expect(parseChannelDyes('x')).toBeNull();
+    expect(parseChannelDyes({})).toBeNull();
   });
 });

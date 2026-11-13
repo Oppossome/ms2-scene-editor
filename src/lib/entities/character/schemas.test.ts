@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelsSchema, expressionSchema } from './schemas.js';
+import { channelsSchema, dyeSchema, expressionSchema } from './schemas.js';
 
 describe('expressionSchema', () => {
   it('accepts a known expression and rejects unknown names and texture paths', () => {
@@ -20,5 +20,15 @@ describe('channelsSchema', () => {
     expect(channelsSchema.parse({ ch0: 'x', ch1: 1.5, ch2: Infinity })).toBeUndefined();
     expect(channelsSchema.safeParse(null).success).toBe(false);
     expect(channelsSchema.safeParse([]).success).toBe(false);
+  });
+});
+
+describe('dyeSchema', () => {
+  it('accepts a palette row or a custom #rrggbb colour, stored lower-case', () => {
+    expect(dyeSchema.parse(4)).toBe(4);
+    expect(dyeSchema.parse('#A0B1C2')).toBe('#a0b1c2');
+    expect(channelsSchema.parse({ ch0: '#112233', ch2: 2 })).toEqual({ ch0: '#112233', ch2: 2 });
+    for (const bad of ['red', '#abc', 'a0b1c2', '#a0b1c2ff', -1, 1.5])
+      expect(dyeSchema.safeParse(bad).success).toBe(false);
   });
 });

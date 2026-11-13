@@ -13,7 +13,7 @@ import { RiggedModel } from '../entities/rigged-model.svelte.js';
 import { SceneRuntime } from '../scene/runtime.svelte.js';
 import { SceneState, type NewItem } from '../scene/store.svelte.js';
 import { saveNamed, type OutfitSnapshot } from '../entities/character/outfits.js';
-import type { ChannelIndexes } from '../entities/character/tint.js';
+import type { ChannelDyes, Dye } from '../entities/character/tint.js';
 import type { ItemRecord, MapEnvironment } from '../types.js';
 import { DEFAULT_VIEW, resolveEnvironment, type ViewSettings } from './viewport/view-settings.js';
 import { lastFrame, stepFrame } from '../assets/frames.js';
@@ -181,7 +181,7 @@ export class Studio {
   }
 
   /** Wear an item on the targeted character, or put it on a new base character of the given gender. */
-  insertItem(item: ItemRecord, gender: 0 | 1, color?: number, channelColors?: ChannelIndexes): string {
+  insertItem(item: ItemRecord, gender: 0 | 1, color?: Dye, channelColors?: ChannelDyes): string {
     const target = this.itemTarget;
     if (target) {
       const parent = this.insertParentId;
@@ -344,7 +344,7 @@ export class Studio {
   }
 
   /** Wear an item: it becomes a child of the character (optionally mounted on a bone). */
-  commitItem(target: AddTarget, item: ItemRecord, color?: number, channelColors?: ChannelIndexes): string {
+  commitItem(target: AddTarget, item: ItemRecord, color?: Dye, channelColors?: ChannelDyes): string {
     return this.store.equipItem(
       target.nodeId,
       { itemId: item.id, name: item.name, slots: item.slots, color, channelColors, attachBone: target.bone },
