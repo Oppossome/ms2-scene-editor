@@ -6,6 +6,7 @@
   import { Box3, Vector3, type Fog, type Object3D, type PerspectiveCamera } from 'three';
   import { FLY_KEYS } from './camera-keys.js';
   import { fogColor, fogRange, type FogSpec } from './fog.js';
+  import { setOrbitControls } from './orbit-context.js';
   import type { OrbitControls as OrbitControlsType } from 'three/addons/controls/OrbitControls.js';
   import type { Snippet } from 'svelte';
 
@@ -45,6 +46,7 @@
 
   let camera = $state<PerspectiveCamera>();
   let controls = $state<OrbitControlsType>();
+  setOrbitControls(() => controls);
 
   function frame(target: Object3D | Box3) {
     if (!camera || !controls) return;

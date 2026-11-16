@@ -1,11 +1,31 @@
 #!/usr/bin/env node
 // Batch NIF -> GLB for everything under extracted/Resource/Model (textures referenced, not embedded).
-// Usage: node cmd/extract/nif/convert-all.js [--force] [--no-animations] [subdir ...]
+// Usage: node cmd/extract/nif/convert-all.js [--force] [--no-animations] [--fx] [subdir ...]
+// --fx: only NIFs with effect content (particles, billboards, time controllers, additive or no-depth-write materials),
+//       to refresh those after converter changes without redoing every model; combine with --force.
 // Output: extracted/converted/models/<same relative path>.glb (with the .kf clips from the same folder embedded).
 // Models with more than EMBED_LIMIT clips get skeleton-only per-clip GLBs in <model>.anims/ (or <folder>/_clips/ when the folder holds several models).
 const fs = require('fs');
 const path = require('path');
 const { convert, findKfFiles } = require('./to-gltf');
+const { parseHeader } = require('./header');
+const { parseBlock } = require('./parse');
+
+const FX_BLOCKS =
+  /^(NiPS|NiBillboardNode|NiSortAdjustNode|NiTransformController|NiTextureTransformController|NiAlphaController|NiFlipController|NiVisController|NiMaterialColorController)/;
+function hasEffectContent(file) {
+  const buf = fs.readFileSync(file);
+  const h = parseHeader(buf);
+  for (const b of h.blocks) {
+    if (FX_BLOCKS.test(b.type)) return true;
+    if (b.type === 'NiAlphaProperty') {
+      const a = parseBlock(buf, h, b);
+      if (a.flags & 1 && ((a.flags >> 5) & 15) === 0) return true; // additive (destination factor ONE)
+    }
+    if (b.type === 'NiZBufferProperty' && !(parseBlock(buf, h, b).flags & 2)) return true;
+  }
+  return false;
+}
 
 // Models with more clips than this get one skeleton-only GLB per clip (<model>.anims/<clip>.glb) instead of embedding them all.
 const EMBED_LIMIT = 64;
@@ -25,6 +45,7 @@ function* walk(dir) {
 const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
 const force = flags.includes('--force');
 const withAnimations = !flags.includes('--no-animations');
+const fxOnly = flags.includes('--fx');
 const subdirs = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const roots = subdirs.length ? subdirs.map((s) => path.join(modelRoot, s)) : [modelRoot];
 const totals = {
@@ -48,7 +69,7 @@ let n = 0;
 for (const root of roots) {
   for (const file of walk(root)) {
     const dest = path.join(outRoot, path.relative(modelRoot, file).replace(/\.nif$/i, '.glb'));
-    if (!force && fs.existsSync(dest)) {
+    if ((!force && fs.existsSync(dest)) || (fxOnly && !hasEffectContent(file))) {
       totals.skipped++;
       continue;
     }

@@ -222,6 +222,15 @@ export class CharacterRig {
     }
   }
 
+  /** A node of the body by its game name (bones, dummy points, "Scene Root"), for effects. */
+  node(name: string): Object3D | undefined {
+    return this.nodes.get(lower(name));
+  }
+
+  get weaponsDrawn(): boolean {
+    return this.drawn;
+  }
+
   /** Whether weapons are in the hand (a combat clip) or on their carry points. */
   setWeaponsDrawn(drawn: boolean) {
     if (drawn === this.drawn) return;

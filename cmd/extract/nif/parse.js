@@ -2,6 +2,7 @@
 // Every parser returns the object and leaves reader.pos where it stopped, so callers can verify
 // that pos === block.offset + block.size (the header's per-block size is an exact oracle).
 const { Reader } = require('./header');
+const fx = require('./fx');
 
 const FORMATS = {
   // id -> [componentType, bytesPerComponent, normalized]
@@ -369,6 +370,8 @@ const PARSERS = {
   NiAlphaProperty: parseNiAlphaProperty
 };
 
+fx.register(PARSERS, { readObjectNET, parseNiNode, parseNiMesh, readKeyGroup, readQuatTransform, str });
+
 function parseBlock(buf, h, block) {
   const r = new Reader(buf, block.offset);
   const baseType = block.type.split('\x01')[0];
@@ -380,4 +383,4 @@ function parseBlock(buf, h, block) {
   return obj;
 }
 
-module.exports = { parseBlock, describeFormat };
+module.exports = { parseBlock, describeFormat, readKeyGroup };

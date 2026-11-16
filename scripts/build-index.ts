@@ -5,7 +5,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
-import type { Gender, IndexMeta, ItemAsset, ItemRecord, MapRecord, NpcRecord, PaletteColor } from '../src/lib/types.ts';
+import type {
+  EffectRecord,
+  SkillMotion,
+  SkillRecord,
+  Gender,
+  IndexMeta,
+  ItemAsset,
+  ItemRecord,
+  MapRecord,
+  NpcRecord,
+  PaletteColor
+} from '../src/lib/types.ts';
 
 const ROOT = path.resolve(process.env.MS2_EXTRACTED ?? 'extracted');
 const OUT = path.resolve(process.env.MS2_DATA ?? '.data');
@@ -87,6 +98,7 @@ function itemIcon(property: Record<string, string> | undefined, id: string): str
 
 interface ItemEnvironment {
   property?: Record<string, string>;
+  effect?: Record<string, string>;
   customize?: Record<string, string>;
   slots?: { slot?: { name?: string; asset?: Record<string, string>[] }[] };
 }
@@ -113,8 +125,13 @@ function buildItems(): ItemRecord[] {
     let palette = 0;
     let defaultColor = 0;
     let channels: [boolean, boolean] = [false, false];
+    const effects: NonNullable<ItemRecord['effects']> = {};
     for (const env of envs) {
       property ??= env.property;
+      for (const key of ['idle', 'battleIdle', 'characterIdle', 'characterBattleIdle'] as const) {
+        const value = String(env.effect?.[key] ?? '').trim();
+        if (!effects[key] && /\.xml$/i.test(value)) effects[key] = value.replace(/\\/g, '/');
+      }
       if (!palette) {
         palette = num(env.customize?.colorPalette);
         defaultColor = Math.max(0, num(env.customize?.defaultColorIndex, 0));
@@ -161,7 +178,8 @@ function buildItems(): ItemRecord[] {
       channels,
       type: num(property?.type),
       subtype: num(property?.subtype),
-      category: String(property?.category ?? '')
+      category: String(property?.category ?? ''),
+      ...(Object.keys(effects).length ? { effects } : {})
     });
   }
   return items;
@@ -183,12 +201,14 @@ function buildNpcs(): NpcRecord[] {
       continue;
     }
     const id = path.basename(file, '.xml');
+    const keepEffect = /<basic[^>]*\bkeepEffect="([^"]+\.xml)"/i.exec(text)?.[1]?.replace(/\\/g, '/');
     npcs.push({
       id,
       name: names.get(id)?.name ?? kfm,
       glb,
       scale: num(model[2], 1),
-      level: num(/<basic[^>]*\blevel="(\d+)"/.exec(text)?.[1])
+      level: num(/<basic[^>]*\blevel="(\d+)"/.exec(text)?.[1]),
+      ...(keepEffect ? { keepEffect } : {})
     });
   }
   return npcs;
@@ -262,6 +282,43 @@ function buildFlatModels(): { flats: Record<string, string>; llids: Record<strin
   return { flats: out, llids };
 }
 
+// ---- skills: the clips and effect XMLs of each skill's first level (only skills that show an effect)
+function buildSkills(): SkillRecord[] {
+  const names = new Map<string, string>();
+  const stringDir = path.join(ROOT, 'Xml/string/en');
+  for (const file of fs.existsSync(stringDir) ? fs.readdirSync(stringDir) : [])
+    if (/^skillname.*\.xml$/i.test(file)) for (const [id, v] of readNames(file)) if (v.name) names.set(id, v.name);
+  const attr = (tag: string, name: string) => new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1]?.trim() ?? '';
+  const out: SkillRecord[] = [];
+  for (const file of walk(path.join(ROOT, 'Xml/skill'), '.xml')) {
+    const text = readText(file);
+    const level = /<level\b[^>]*>([\s\S]*?)<\/level>/.exec(text)?.[1] ?? '';
+    const motions: SkillMotion[] = [];
+    for (const tag of level.match(/<motionProperty\b[^>]*>/g) ?? []) {
+      const clip = attr(tag, 'sequenceName');
+      if (!clip) continue;
+      const cast = attr(tag, 'motionEffect').replace(/\\/g, '/');
+      const loop = attr(tag, 'loopEffect').replace(/\\/g, '/');
+      motions.push({ clip, ...(cast ? { cast } : {}), ...(loop ? { loop } : {}) });
+    }
+    if (!motions.some((m) => m.cast || m.loop)) continue;
+    const id = path.basename(file, '.xml');
+    out.push({ id, name: names.get(id) ?? id, motions });
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+// ---- effects: every converted effect model
+function buildEffects(): EffectRecord[] {
+  const out: EffectRecord[] = [];
+  for (const rel of glbIndex.values()) {
+    if (!/^effect\//i.test(rel) || /\.anims\/|\/_clips\//i.test(rel)) continue;
+    const name = rel.replace(/^effect\//i, '').replace(/\.glb$/i, '');
+    out.push({ id: name.toLowerCase(), name, glb: rel });
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
 function write(name: string, data: unknown) {
   fs.writeFileSync(path.join(OUT, name), JSON.stringify(data));
 }
@@ -277,6 +334,10 @@ console.log('maps...');
 const maps = buildMaps();
 console.log('flat models...');
 const { flats, llids } = buildFlatModels();
+console.log('effects...');
+const effects = buildEffects();
+console.log('skills...');
+const skills = buildSkills();
 
 write('palettes.json', palettes);
 write('items.json', items);
@@ -284,6 +345,8 @@ write('npcs.json', npcs);
 write('maps.json', maps);
 write('flats.json', flats);
 write('llids.json', llids);
+write('effects.json', effects);
+write('skills.json', skills);
 const meta: IndexMeta = {
   builtAt: new Date().toISOString(),
   items: items.length,
@@ -291,6 +354,8 @@ const meta: IndexMeta = {
   maps: maps.length,
   flatModels: Object.keys(flats).length,
   llidModels: Object.keys(llids).length,
+  effects: effects.length,
+  skills: skills.length,
   palettes: Object.keys(palettes).length,
   warnings
 };

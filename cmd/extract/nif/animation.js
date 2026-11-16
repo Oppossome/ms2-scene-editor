@@ -280,4 +280,4 @@ function loadClip(kfPath) {
   };
 }
 
-module.exports = { loadClip, basisFunctions };
+module.exports = { loadClip, basisFunctions, evaluateTransform };

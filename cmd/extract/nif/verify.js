@@ -4,8 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const { parseHeader } = require('./header');
 const { parseBlock } = require('./parse');
+const { FX_TYPES } = require('./fx');
 
-const EXT = '.' + (process.argv[2] || 'nif');
+// Modes: nif (geometry and materials), kf (animation), fx (effects: particles, controllers, node subclasses; reads NIFs).
+const MODE = process.argv[2] || 'nif';
+const EXT = '.' + (MODE === 'fx' ? 'nif' : MODE);
 const root = path.resolve(__dirname, '../../../extracted/Resource/Model');
 function* walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -24,26 +27,24 @@ for (const f of walk(root)) {
   const h = parseHeader(buf);
   for (const b of h.blocks) {
     const base = b.type.split('\x01')[0];
-    if (
-      ![
-        'NiNode',
-        'NiMesh',
-        'NiDataStream',
-        'NiTexturingProperty',
-        'NiSourceTexture',
-        'NiMaterialProperty',
-        'NiAlphaProperty',
-        'NiSkinningMeshModifier',
-        'NiTransformData',
-        'NiTransformEvaluator',
-        'NiBSplineCompTransformEvaluator',
-        'NiBSplineData',
-        'NiBSplineBasisData',
-        'NiTextKeyExtraData',
-        'NiSequenceData'
-      ].includes(base)
-    )
-      continue;
+    const geometry = [
+      'NiNode',
+      'NiMesh',
+      'NiDataStream',
+      'NiTexturingProperty',
+      'NiSourceTexture',
+      'NiMaterialProperty',
+      'NiAlphaProperty',
+      'NiSkinningMeshModifier',
+      'NiTransformData',
+      'NiTransformEvaluator',
+      'NiBSplineCompTransformEvaluator',
+      'NiBSplineData',
+      'NiBSplineBasisData',
+      'NiTextKeyExtraData',
+      'NiSequenceData'
+    ];
+    if (!(MODE === 'fx' ? FX_TYPES : geometry).includes(base)) continue;
     const s = (stats[base] ||= { ok: 0, bad: 0 });
     try {
       const o = parseBlock(buf, h, b);

@@ -20,6 +20,8 @@ export interface PreviewItem {
 /** What a preview shows, besides maps: always turned into scene entities that render exactly as in the scene. */
 export type EntitySource =
   | { kind: 'model'; glb: string; scale?: number; clip?: string }
+  /** A game effect, looping. */
+  | { kind: 'effect'; glb: string; /** Effects have no clips; accepted so every source can carry one. */ clip?: string }
   /** A saved outfit. */
   | {
       kind: 'character';
@@ -94,6 +96,8 @@ export async function previewEntities(source: EntitySource): Promise<EntityInput
         })
       ];
     }
+    case 'effect':
+      return [{ type: 'effect', id: ROOT, name: 'Preview', glb: source.glb, loop: true, ...IDENTITY }];
     case 'character': {
       const character = omitUndefined({
         type: 'character',

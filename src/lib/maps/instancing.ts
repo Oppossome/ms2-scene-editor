@@ -67,6 +67,9 @@ export function buildMap(
         const parts: Mesh[] = [];
         model.scene.traverse((o) => {
           const mesh = o as Mesh;
+          // Particle system stand-ins and nodes hidden until an effect shows them are not static geometry.
+          const extras = mesh.userData.ms2 as { particles?: number; hidden?: boolean } | undefined;
+          if (extras?.particles !== undefined || extras?.hidden) return;
           if (mesh.isMesh && !(mesh as { isSkinnedMesh?: boolean }).isSkinnedMesh) parts.push(mesh);
         });
         const matrix = new Matrix4();

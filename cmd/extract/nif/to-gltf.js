@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { Reader, parseHeader } = require('./header');
 const { parseBlock } = require('./parse');
 const { loadClip } = require('./animation');
+const fx = require('./effects');
 
 const TEXTURE_ROOT = path.resolve(__dirname, '../../../extracted/converted/textures/Resource/Model');
 const MODEL_ROOT = path.resolve(__dirname, '../../../extracted/Resource/Model');
@@ -260,10 +261,17 @@ function convert(
   for (let i = 0; i < numRoots; i++) roots.push(fr.i32());
 
   // Bones (and all their ancestors) must survive pruning and the hidden-flag filter so skins can reference them.
+  // Any NiNode subclass (billboard, sort adjust) is a node; particle systems are NiMesh subclasses.
+  const isNode = (o) => !!o && Array.isArray(o.children);
+  const isMesh = (o) => !!o && o.type === 'NiMesh';
   const parentOf = new Map();
   h.blocks.forEach((b, i) => {
-    if (b.type === 'NiNode') for (const c of get(i).children) if (c >= 0) parentOf.set(c, i);
+    const o = get(i);
+    if (isNode(o)) for (const c of o.children) if (c >= 0) parentOf.set(c, i);
   });
+  const requireWithAncestors = (set, start) => {
+    for (let x = start; x !== undefined && x >= 0 && !set.has(x); x = parentOf.get(x)) set.add(x);
+  };
   const skinModifierOf = (mesh) => mesh.modifiers.map(get).find((m) => m && m.type === 'NiSkinningMeshModifier');
   const required = new Set();
   h.blocks.forEach((b, i) => {
@@ -277,8 +285,36 @@ function convert(
   // Skeleton files keep every node: empty dummies (Weapon_*_Point, HR, CP, ...) are attachment points for items.
   if (skeletonOnly || required.size > 0)
     h.blocks.forEach((b, i) => {
-      if (b.type === 'NiNode') required.add(i);
+      if (isNode(get(i))) required.add(i);
     });
+  // Effects need their particle systems, the objects those reference (emitters, forces, colliders, emitter meshes),
+  // and nodes a visibility controller shows later, even when hidden or empty.
+  const fxRequired = new Set();
+  if (!skeletonOnly)
+    h.blocks.forEach((b, i) => {
+      const o = get(i);
+      if (fx.isParticleSystem(o)) {
+        requireWithAncestors(fxRequired, i);
+        for (const r of fx.systemReferences(get, i)) requireWithAncestors(fxRequired, r);
+      } else if ((isNode(o) || isMesh(o)) && fx.hasController(get, o, 'NiVisController'))
+        requireWithAncestors(fxRequired, i);
+    });
+  // Render-state properties are inherited from ancestors in Gamebryo (the nearest one wins).
+  const inheritedProperty = (i, type) => {
+    for (let x = parentOf.get(i); x !== undefined; x = parentOf.get(x)) {
+      const n = get(x);
+      for (const ref of (n && n.properties) || []) {
+        const p = get(ref);
+        if (p && p.type === type) return p;
+      }
+    }
+    return null;
+  };
+  const blockIndex = new Map(); // parsed object -> block index
+  h.blocks.forEach((b, i) => {
+    const o = get(i);
+    if (o) blockIndex.set(o, i);
+  });
   const nodeMap = new Map();
   const nodeByName = new Map();
   const pendingSkins = [];
@@ -297,20 +333,44 @@ function convert(
   function materialFor(mesh) {
     let mat = null,
       tex = null,
-      alpha = null;
+      alpha = null,
+      zbuffer = null,
+      vertexColor = null,
+      stencil = null;
     for (const ref of mesh.properties) {
       const p = get(ref);
       if (!p) continue;
       if (p.type === 'NiMaterialProperty') mat = p;
       else if (p.type === 'NiTexturingProperty') tex = p;
       else if (p.type === 'NiAlphaProperty') alpha = p;
+      else if (p.type === 'NiZBufferProperty') zbuffer = p;
+      else if (p.type === 'NiStencilProperty') stencil = p;
+      else if (p.type === 'NiVertexColorProperty') vertexColor = p;
     }
+    const self = blockIndex.get(mesh);
+    alpha ||= inheritedProperty(self, 'NiAlphaProperty');
+    zbuffer ||= inheritedProperty(self, 'NiZBufferProperty');
+    stencil ||= inheritedProperty(self, 'NiStencilProperty');
+    vertexColor ||= inheritedProperty(self, 'NiVertexColorProperty');
+    const boost = mesh.extraData.map(get).find((e) => e && e.type === 'NiFloatExtraData' && e.name === 'ColorBoost');
+    const state = fx.renderState({
+      alpha,
+      zbuffer,
+      stencil,
+      vertexColor,
+      material: mat,
+      colorBoost: boost && boost.value
+    });
+    // Animated properties get a material of their own so the app can animate it per mesh.
+    const animated = [mat, tex].filter((p) => p && p.controller >= 0).map((p) => blockIndex.get(p));
     const key = [
       mat && mat.name,
       tex && JSON.stringify(tex.textures),
       alpha && alpha.flags + ':' + alpha.threshold,
       mat && mat.diffuse.join(),
-      mat && mat.alpha
+      mat && mat.alpha,
+      JSON.stringify(state),
+      animated.join()
     ].join('|');
     if (glb.materialCache.has(key)) return glb.materialCache.get(key);
     const m = {
@@ -343,6 +403,8 @@ function convert(
       stats.textures++;
       return glb.addImage(file);
     };
+    const uriOf = (file) => path.relative(glb.outDir, file).split(path.sep).map(encodeURIComponent).join('/');
+    const ms2 = { state };
     if (tex) {
       const base = texFile(tex.textures.base);
       if (base != null) m.pbrMetallicRoughness.baseColorTexture = { index: base };
@@ -351,19 +413,24 @@ function convert(
       // Other Gamebryo slots have no glTF equivalent. With external textures they are listed as relative URIs in
       // extras.ms2 so a viewer can build its own shader (the colour mask under "shader0" selects the tint channels).
       if (glb.outDir) {
-        const ms2 = {};
         for (const slot of ['gloss', 'glow', 'detail', 'dark', 'decal0', 'decal1', 'bump']) {
           const file = texPath(tex.textures[slot]);
-          if (file) ms2[slot] = path.relative(glb.outDir, file).split(path.sep).map(encodeURIComponent).join('/');
+          if (file) ms2[slot] = uriOf(file);
         }
         tex.shaderTextures.forEach((desc, i) => {
           const file = texPath(desc);
-          if (file)
-            ms2['shader' + i] = path.relative(glb.outDir, file).split(path.sep).map(encodeURIComponent).join('/');
+          if (file) ms2['shader' + i] = uriOf(file);
         });
-        if (Object.keys(ms2).length) m.extras = { ms2 };
       }
+      // Static texture transforms (the animated ones are tracks in the scene's ms2fx).
+      const transforms = {};
+      for (const [slot, desc] of Object.entries(tex.textures))
+        if (desc && desc.transform) transforms[slot] = desc.transform;
+      if (Object.keys(transforms).length) ms2.uvTransforms = transforms;
+      // Gamebryo apply mode (flags bits 0-2 of NiTexturingProperty: 0 replace, 1 decal, 2 modulate).
+      ms2.applyMode = tex.flags & 7;
     }
+    m.extras = { ms2 };
     glb.json.materials.push(m);
     const id = glb.json.materials.length - 1;
     glb.materialCache.set(key, id);
@@ -462,22 +529,50 @@ function convert(
     return primitives.length ? primitives : null;
   }
 
+  // A unit quad standing in for a particle system: it carries the system's material, and the app hides it.
+  let particleQuad = null;
+  function particleQuadPrimitive(material) {
+    if (!particleQuad) {
+      const pos = Float32Array.of(-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0);
+      particleQuad = {
+        POSITION: glb.addAccessor(pos, 5126, 'VEC3', 34962, { min: [-1, -1, 0], max: [1, 1, 0] }),
+        NORMAL: glb.addAccessor(Float32Array.of(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1), 5126, 'VEC3', 34962),
+        TEXCOORD_0: glb.addAccessor(Float32Array.of(0, 1, 1, 1, 1, 0, 0, 0), 5126, 'VEC2', 34962),
+        indices: glb.addAccessor(Uint16Array.of(0, 1, 2, 0, 2, 3), 5123, 'SCALAR', 34963)
+      };
+    }
+    const { indices, ...attributes } = particleQuad;
+    return { attributes, indices, mode: 4, material };
+  }
+  const particleSystems = []; // [block index, glTF node]
+
   function buildNode(i) {
     const o = get(i);
-    if (!o || (o.type !== 'NiNode' && o.type !== 'NiMesh')) return null;
-    if (!includeHidden && o.flags & HIDDEN_FLAG && !required.has(i)) {
+    if (!o || !(isNode(o) || isMesh(o) || fx.isParticleSystem(o))) return null;
+    const hidden = !!(o.flags & HIDDEN_FLAG);
+    if (!includeHidden && hidden && !required.has(i) && !fxRequired.has(i)) {
       stats.skippedHidden++;
       return null;
     }
     const node = { name: o.name || undefined };
+    const ms2 = {};
+    if (hidden && fxRequired.has(i)) ms2.hidden = true; // shown later by a visibility controller, or an emitter shape
+    if (o.type === 'NiBillboardNode') ms2.billboard = o.billboardMode;
+    if (o.type === 'NiSortAdjustNode') ms2.sortAdjust = o.sortingMode;
     // TRS (not a matrix) so animation channels can target the node.
     if (o.translation.some((v) => Math.abs(v) > 1e-6)) node.translation = o.translation;
     const q = matToQuat(o.rotation);
     if (Math.abs(q[0]) > 1e-6 || Math.abs(q[1]) > 1e-6 || Math.abs(q[2]) > 1e-6 || Math.abs(q[3] - 1) > 1e-6)
       node.rotation = q;
     if (Math.abs(o.scale - 1) > 1e-6) node.scale = [o.scale, o.scale, o.scale];
-    if (o.type === 'NiMesh' && skeletonOnly) return null;
-    if (o.type === 'NiMesh') {
+    if ((isMesh(o) || fx.isParticleSystem(o)) && skeletonOnly) return null;
+    if (fx.isParticleSystem(o)) {
+      stats.particleSystems = (stats.particleSystems || 0) + 1;
+      stats.primitives++;
+      glb.json.meshes.push({ name: o.name || undefined, primitives: [particleQuadPrimitive(materialFor(o))] });
+      node.mesh = glb.json.meshes.length - 1;
+      particleSystems.push([i, node]);
+    } else if (isMesh(o)) {
       stats.meshes++;
       const prims = buildMesh(o);
       if (!prims) return null;
@@ -487,9 +582,10 @@ function convert(
       if (mod && prims.some((pr) => pr.attributes.JOINTS_0 !== undefined)) pendingSkins.push({ node, mod });
     } else {
       const kids = o.children.map(buildNode).filter((k) => k != null);
-      if (kids.length === 0 && !required.has(i)) return null;
+      if (kids.length === 0 && !required.has(i) && !fxRequired.has(i)) return null;
       if (kids.length) node.children = kids;
     }
+    if (Object.keys(ms2).length) node.extras = { ms2 };
     glb.json.nodes.push(node);
     nodeMap.set(i, glb.json.nodes.length - 1);
     if (o.name && !nodeByName.has(o.name)) nodeByName.set(o.name, glb.json.nodes.length - 1);
@@ -497,6 +593,55 @@ function convert(
   }
 
   const sceneRoots = roots.map(buildNode).filter((n) => n != null);
+
+  // Effects: fx ids name the nodes the effect description refers to (they survive cloning as userData).
+  const fxIds = new Map();
+  const fxIdOf = (block) => {
+    if (fxIds.has(block)) return fxIds.get(block);
+    const n = nodeMap.get(block);
+    if (n === undefined) return undefined;
+    const id = fxIds.size;
+    fxIds.set(block, id);
+    const node = glb.json.nodes[n];
+    ((node.extras ||= {}).ms2 ||= {}).fxId = id;
+    return id;
+  };
+  // Property block -> the built meshes using it (directly, or inherited from an ancestor node).
+  const meshesOfProperty = new Map();
+  for (const [block] of nodeMap) {
+    const o = get(block);
+    if (!isMesh(o) && !fx.isParticleSystem(o)) continue;
+    for (let x = block; x !== undefined; x = parentOf.get(x))
+      for (const ref of get(x).properties || []) {
+        if (!meshesOfProperty.has(ref)) meshesOfProperty.set(ref, []);
+        meshesOfProperty.get(ref).push(block);
+      }
+  }
+  const fxCtx = {
+    get,
+    blocks: h.blocks,
+    fxIdOf,
+    meshNodesOfProperty: (p) => meshesOfProperty.get(p) || [],
+    textureUri: (ref) => {
+      const src = get(ref);
+      if (!src || src.type !== 'NiSourceTexture' || !src.fileName || !glb.outDir) return null;
+      const file = resolveTexture(src.fileName, nifPath);
+      return file ? path.relative(glb.outDir, file).split(path.sep).map(encodeURIComponent).join('/') : null;
+    }
+  };
+  const systems = particleSystems.map(([block, node], index) => {
+    ((node.extras ||= {}).ms2 ||= {}).particles = index;
+    return fx.describeSystem(fxCtx, block);
+  });
+  const { tracks, duration } = skeletonOnly ? { tracks: [], duration: 0 } : fx.describeEffects(fxCtx);
+  const fxDuration = Math.max(
+    duration,
+    ...systems.flatMap((sys) => sys.controllers.map((c) => (Number.isFinite(c.ctl.stop) ? c.ctl.stop : 0)))
+  );
+  if (tracks.length || systems.length) {
+    glb.json.scenes[0].extras = { ms2fx: { version: 1, duration: fxDuration, tracks, systems } };
+    stats.effectTracks = tracks.length;
+  }
 
   for (const { node, mod } of pendingSkins) {
     const joints = mod.bones.map((b) => nodeMap.get(b));

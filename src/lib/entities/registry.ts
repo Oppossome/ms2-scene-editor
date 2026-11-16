@@ -6,6 +6,7 @@ import { PropEntity } from './prop.svelte.js';
 import { CharacterEntity } from './character/character.svelte.js';
 import { ItemEntity } from './character/item.svelte.js';
 import { LightingEntity } from './lighting.svelte.js';
+import { EffectEntity } from './effect.svelte.js';
 
 /** The saved `type` tag selects the class; nothing else in a document can name a constructor. */
 const entityTypes = new Map<string, new (input?: EntityInput) => Entity>([
@@ -14,7 +15,8 @@ const entityTypes = new Map<string, new (input?: EntityInput) => Entity>([
   ['npc', NpcEntity],
   ['character', CharacterEntity],
   ['item', ItemEntity],
-  ['lighting', LightingEntity]
+  ['lighting', LightingEntity],
+  ['effect', EffectEntity]
 ]);
 
 /** Make an entity from saved values (or a creation spec), tagged by `type` (`kind` in versions 1 and 2). */

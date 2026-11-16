@@ -51,8 +51,10 @@ export async function fetchMap(id: string, signal?: AbortSignal): Promise<MapDat
 export function composeMap(group: GroupEntity, data: MapData, allocate = newId): Entity[] {
   const props = data.items.map((item) => {
     const glb = data.models[item[0]];
+    // Effect placements (torches, sparkles, portals) play their particles and animations as effect entities.
+    const effect = /^effect\//i.test(glb);
     return restoreEntity({
-      type: 'prop',
+      type: effect ? 'effect' : 'prop',
       id: allocate(),
       name: glb
         .split('/')
@@ -60,7 +62,7 @@ export function composeMap(group: GroupEntity, data: MapData, allocate = newId):
         .replace(/\.glb$/i, ''),
       parentId: group.id,
       glb,
-      instanced: true,
+      ...(effect ? {} : { instanced: true }),
       ...decomposeForScene(entityMatrix(item))
     });
   });

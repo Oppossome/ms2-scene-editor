@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { SkillRecord } from '../../types.js';
+  import type { Entity } from '../../entities/types.js';
   import { onDestroy, tick, untrack } from 'svelte';
   import { previewUrlForModel } from '#lib/assets/urls.js';
   import AssetBrowser from '#lib/studio/toolbox/AssetBrowser.svelte';
@@ -40,6 +42,12 @@
     snapshot: OutfitSnapshot;
   }
 
+  /** Detail line of a skill row: its id and the clips its effects go with. */
+  function skillDetail(r: SkillRecord) {
+    const clips = [...new Set(r.motions.filter((m) => m.cast || m.loop).map((m) => m.clip))];
+    return [r.id, clips.slice(0, 3).join(', ') + (clips.length > 3 ? '...' : '')].filter(Boolean).join(' - ');
+  }
+
   /** Detail line of an NPC row: its level (or the levels of the NPCs it stands for) and how many there are. */
   function npcDetail(r: { id?: string; level?: number; levels?: [number, number]; variants?: number }) {
     const [low, high] = r.levels ?? [r.level ?? 0, r.level ?? 0];
@@ -48,11 +56,13 @@
     return [level, variants, r.id].filter(Boolean).join(' - ');
   }
 
-  type Tab = 'props' | 'npcs' | 'maps' | 'characters' | 'items';
+  type Tab = 'props' | 'npcs' | 'maps' | 'effects' | 'skills' | 'characters' | 'items';
   const TABS: { id: Tab; label: string }[] = [
     { id: 'props', label: 'Props' },
     { id: 'npcs', label: 'NPCs' },
     { id: 'maps', label: 'Maps' },
+    { id: 'effects', label: 'Effects' },
+    { id: 'skills', label: 'Skills' },
     { id: 'characters', label: 'Characters' },
     { id: 'items', label: 'Items' }
   ];
@@ -168,6 +178,21 @@
       }
       case 'maps':
         return { kind: 'map', id: (s as MapEntry).id };
+      case 'effects':
+        return { kind: 'effect', glb: (s as ModelEntry).glb };
+      case 'skills': {
+        // A skill plays on the selected character or NPC: preview a copy of it playing the skill.
+        const skillTarget = studio.skillTarget;
+        if (!skillTarget) return null;
+        const skill = s as unknown as SkillRecord;
+        const { index, clip } = studio.skillMotion(skillTarget, skill);
+        const [root, ...rest] = sceneEntities(skillTarget as Entity, store.itemsOf(skillTarget.id));
+        return {
+          kind: 'entities',
+          entities: [{ ...root, skill: { id: skill.id, name: skill.name, motion: index } }, ...rest],
+          clip
+        };
+      }
       case 'characters': {
         const o = (s as OutfitEntry).snapshot;
         return {
@@ -217,6 +242,12 @@
       case 'maps':
         id = await studio.insertMap(s as MapEntry);
         break;
+      case 'effects':
+        id = studio.insertEffect(s as ModelEntry);
+        break;
+      case 'skills':
+        id = studio.applySkill(s as unknown as SkillRecord);
+        break;
       case 'characters': {
         const o = s as OutfitEntry;
         id = await studio.insertCharacter(o.saved ? o.name : o.snapshot.gender === 1 ? 'Female' : 'Male', o.snapshot);
@@ -235,6 +266,8 @@
   }
 
   const buttonLabel = $derived.by(() => {
+    if (tab === 'skills')
+      return studio.skillTarget ? `Play on ${studio.skillTarget.name}` : 'Select a character or NPC';
     if (tab !== 'items') return 'Insert';
     if (target) return `Wear on ${target.name}`;
     return `Insert on a new ${itemTargetGender === 1 ? 'female' : 'male'} character`;
@@ -264,18 +297,28 @@
   </div>
 
   <div class="list">
-    {#if tab === 'props' || tab === 'npcs' || tab === 'maps'}
+    {#if tab === 'props' || tab === 'npcs' || tab === 'maps' || tab === 'effects' || tab === 'skills'}
       {#key tab}
         <AssetBrowser
           endpoint={`/api/${tab}`}
-          placeholder={tab === 'props' ? 'Search props...' : tab === 'npcs' ? 'Search NPCs...' : 'Search maps...'}
+          placeholder={tab === 'props'
+            ? 'Search props...'
+            : tab === 'npcs'
+              ? 'Search NPCs...'
+              : tab === 'effects'
+                ? 'Search effects (bg, skill, npc...)'
+                : tab === 'skills'
+                  ? 'Search skills by name or id...'
+                  : 'Search maps...'}
           selectedId={selected?.id ?? null}
           onselect={(r: ModelEntry) => (selected = r)}
           onactivate={(r: ModelEntry) => {
             selected = r;
             void insert();
           }}
-          thumb={tab === 'maps' ? undefined : (r: ModelEntry) => previewUrlForModel(r.glb)}
+          thumb={tab === 'maps' || tab === 'effects' || tab === 'skills'
+            ? undefined
+            : (r: ModelEntry) => previewUrlForModel(r.glb)}
           detail={(
             r: ModelEntry & {
               id?: string;
@@ -284,7 +327,16 @@
               variants?: number;
               xblock?: string;
             }
-          ) => (tab === 'npcs' ? npcDetail(r) : tab === 'maps' ? `${r.id} - ${r.xblock ?? ''}` : (r.id ?? ''))}
+          ) =>
+            tab === 'npcs'
+              ? npcDetail(r)
+              : tab === 'maps'
+                ? `${r.id} - ${r.xblock ?? ''}`
+                : tab === 'effects'
+                  ? r.name.split('/').slice(0, -1).join('/')
+                  : tab === 'skills'
+                    ? skillDetail(r as unknown as SkillRecord)
+                    : (r.id ?? '')}
         />
       {/key}
     {:else if tab === 'items'}

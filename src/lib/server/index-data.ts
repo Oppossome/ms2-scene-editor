@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { error } from '@sveltejs/kit';
-import type { IndexMeta, ItemRecord, MapRecord, NpcRecord, PaletteColor } from '../types.js';
+import type { EffectRecord, SkillRecord, IndexMeta, ItemRecord, MapRecord, NpcRecord, PaletteColor } from '../types.js';
 
 const DATA_DIR = path.resolve(process.env.MS2_DATA ?? '.data');
 
@@ -39,6 +39,8 @@ export const getFlats = () => load<Record<string, string>>('flats.json');
 /** Lowercase llid -> converted model path. */
 export const getLlids = () => load<Record<string, string>>('llids.json');
 export const getMeta = () => load<IndexMeta>('meta.json');
+export const getEffects = () => load<EffectRecord[]>('effects.json');
+export const getSkills = () => load<SkillRecord[]>('skills.json');
 
 let itemsById: { source: ItemRecord[]; map: Map<string, ItemRecord> } | null = null;
 export function getItemById(id: string): ItemRecord | undefined {

@@ -47,6 +47,14 @@ export function dropSkeletonRoots(buffer: ArrayBuffer): ArrayBuffer {
 export async function exportGlb(input: Object3D | Object3D[], options: GlbOptions = {}): Promise<ArrayBuffer> {
   const objects = Array.isArray(input) ? input : [input];
   const restores = options.bakeTints === false ? [] : objects.map((o) => bakeTints(o));
+  // Particles and effect handles are simulated or editor-only: they are not part of the export.
+  for (const object of objects)
+    object.traverse((o) => {
+      if ((o.userData.effectParticles || o.userData.effectProxy) && o.visible) {
+        o.visible = false;
+        restores.push(() => (o.visible = true));
+      }
+    });
   try {
     const result = await new GLTFExporter().parseAsync(objects.length === 1 ? objects[0] : objects, {
       binary: true,

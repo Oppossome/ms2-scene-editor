@@ -1,5 +1,6 @@
 import { Box3, Group, InstancedMesh, Matrix4, Mesh, type Intersection } from 'three';
 import { loadModel } from '../assets/loader.js';
+import { hasEffects } from '../assets/effects/player.js';
 import type { PropEntity } from '../entities/prop.svelte.js';
 
 /** A gizmo target with local mesh bounds but no cloned render hierarchy. */
@@ -98,7 +99,8 @@ export class EntityBatches {
       model.scene.traverse((object) => {
         if ('isSkinnedMesh' in object) skinned = true;
       });
-      if (skinned || model.animations.length) {
+      // Effects (billboards, particles, animated materials) play per prop, so their props stay ordinary.
+      if (skinned || model.animations.length || hasEffects(model.scene)) {
         this.batches.delete(batch.path);
         this.fallback(batch.path);
         return;

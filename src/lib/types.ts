@@ -39,6 +39,11 @@ export interface ItemRecord {
   type: number;
   subtype: number;
   category: string;
+  /**
+   * Effect XMLs (relative to Xml/effect) the item plays: `characterIdle` on the character wearing it,
+   * `characterBattleIdle` instead while weapons are drawn, `idle`/`battleIdle` on the item itself when it lies alone.
+   */
+  effects?: Partial<Record<'idle' | 'battleIdle' | 'characterIdle' | 'characterBattleIdle', string>>;
 }
 
 /** An animation clip a body or model can play, with its length in seconds (0 when unknown). */
@@ -54,6 +59,8 @@ export interface NpcRecord {
   glb: string;
   scale: number;
   level: number;
+  /** Effect XML (relative to Xml/effect) the NPC always shows, like a ghost's glow. */
+  keepEffect?: string;
 }
 
 /** A placeable prop (flat model) resolved to a converted model. */
@@ -101,6 +108,79 @@ export interface PaletteColor {
   palette: string;
 }
 
+/** A converted effect model (under converted/models/Effect). */
+export interface EffectRecord {
+  /** Lowercase path relative to Effect/, without .glb. */
+  id: string;
+  /** Path relative to Effect/, without .glb (folders say what it belongs to: bg, ch/skill/..., npc, item). */
+  name: string;
+  glb: string;
+}
+
+/** One motion of a skill: the clip the caster plays and the effect XMLs that go with it (relative to Xml/effect). */
+export interface SkillMotion {
+  clip: string;
+  /** Played from the start of the clip. */
+  cast?: string;
+  /** Repeats while the clip plays. */
+  loop?: string;
+}
+
+/** A skill with effects (its first level): what the Skills tab lists and applies to a character or NPC. */
+export interface SkillRecord {
+  id: string;
+  name: string;
+  motions: SkillMotion[];
+}
+
+/** One NIF of an effect timeline (Xml/effect/*.xml), placed on a node of the model that plays it. */
+export interface EffectTimelineNif {
+  kind: 'nif';
+  /** The NIF as the XML names it, relative to Model/Effect. */
+  file: string;
+  /** Converted model (relative to converted/models), or null when it was not converted. */
+  glb: string | null;
+  startDelay: number;
+  /** Seconds it plays; null: until its own animation ends (or forever when it loops). */
+  duration: number | null;
+  loop: boolean;
+  /** Node it is placed on: a bone, a dummy (Eff_Body, ...) or "Scene Root". */
+  parentNode: string;
+  /** Follow the node while playing (false: placed where the node was when it started). */
+  attachToNode: boolean;
+  /** Take the node's rotation and scale too (false: only its position). */
+  applyNodeTransform: boolean;
+  /** Offset on the node, Gamebryo units (cm, Z up), rotation in degrees. */
+  translate: [number, number, number];
+  rotation: [number, number, number];
+  scale: number;
+}
+
+/** One of several entries, picked at random by weight each time the timeline plays. */
+export interface EffectTimelineRandom {
+  kind: 'random';
+  weights: number[];
+  options: EffectTimelineEntry[];
+}
+
+export type EffectTimelineEntry = EffectTimelineNif | EffectTimelineRandom;
+
+export interface EffectTimeline {
+  path: string;
+  entries: EffectTimelineEntry[];
+}
+
+/** A named effect attachment point (Eff_Head, Eff_Body_World, ...) defined on a bone or another dummy. */
+export interface EffectDummy {
+  name: string;
+  parentNode: string;
+  translate: [number, number, number];
+  rotation: [number, number, number];
+  scale: number;
+  /** Keeps world orientation instead of following the parent's rotation. */
+  world: boolean;
+}
+
 export interface IndexMeta {
   builtAt: string;
   items: number;
@@ -108,6 +188,9 @@ export interface IndexMeta {
   maps: number;
   flatModels: number;
   llidModels: number;
+  /** Absent in indexes built before effects were indexed. */
+  effects?: number;
+  skills?: number;
   palettes: number;
   warnings: Record<string, number>;
 }

@@ -5,6 +5,7 @@ import { entityMatrix } from './instancing';
 import { GroupEntity } from '../entities/group.svelte.js';
 import { LightingEntity } from '../entities/lighting.svelte.js';
 import { PropEntity } from '../entities/prop.svelte.js';
+import { EffectEntity } from '../entities/effect.svelte.js';
 import type { MapData } from '../types';
 
 const source: MapData = {
@@ -54,5 +55,13 @@ describe('composeMap', () => {
     expect(
       (composeMap(group, { ...source, items: [], environment: undefined })[0] as LightingEntity).environment
     ).toEqual({});
+  });
+
+  it('places effect models as effect entities, not batched props', () => {
+    const group = new GroupEntity({ id: 'map' });
+    const [torch] = composeMap(group, { ...source, models: ['Effect/bg/common/eff_torch.glb'] });
+    expect(torch).toBeInstanceOf(EffectEntity);
+    expect(torch).toMatchObject({ parentId: 'map', glb: 'Effect/bg/common/eff_torch.glb', name: 'eff_torch' });
+    torch.position.forEach((v, i) => expect(v).toBeCloseTo([10, 30, -20][i]));
   });
 });

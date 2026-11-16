@@ -47,6 +47,8 @@ export function loadModel(rel: string): Promise<LoadedModel> {
   if (!hit) {
     hit = loader.loadAsync(modelUrl(rel)).then((gltf) => {
       tagTextureUris(gltf, modelUrl(rel));
+      // Effects resolve the extra texture slots in their extras against it.
+      gltf.scene.userData.modelHref = modelUrl(rel);
       return { scene: gltf.scene, animations: gltf.animations };
     });
     hit.catch(() => cache.delete(key)); // allow retry after a failure

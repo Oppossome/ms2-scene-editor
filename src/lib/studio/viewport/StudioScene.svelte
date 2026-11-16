@@ -2,9 +2,14 @@
   import { T } from '@threlte/core';
   import { TransformControls } from '@threlte/extras';
   import type { Studio } from '../controller.svelte.js';
+  import type { TransformControls as TransformControlsType } from 'three/addons/controls/TransformControls.js';
   import Picker from './Picker.svelte';
+  import Dragger from './Dragger.svelte';
 
   let { studio }: { studio: Studio } = $props();
+
+  /** The gizmo; its `axis` is set while the pointer is over one of its handles. */
+  let gizmo = $state<TransformControlsType>();
 
   const store = $derived(studio.store);
   const runtime = $derived(studio.runtime);
@@ -46,6 +51,15 @@
   }}
 />
 
+<Dragger
+  {runtime}
+  {store}
+  target={() => target}
+  blocked={() => studio.gizmoActive || (!!target && gizmo?.axis != null)}
+  onstart={() => (studio.gizmoActive = true)}
+  onend={() => (studio.gizmoActive = false)}
+/>
+
 {#if target}
   <!--
     Keyed so every target gets a fresh TransformControls. When Threlte re-attaches an existing one it ends up
@@ -54,6 +68,7 @@
   {#key target}
     <TransformControls
       object={target}
+      bind:controls={gizmo}
       mode={store.mode}
       space={store.space}
       translationSnap={store.snap ? 10 : undefined}

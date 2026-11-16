@@ -38,14 +38,17 @@ export class PreviewController {
 
   private gen = 0;
   private runtime = $state.raw<SceneRuntime | null>(null);
-  /** The entity whose clips play: the model or the character. */
-  private main = $state.raw<RiggedModel | null>(null);
+  /** The entity shown first: the model or character whose clips play, or an effect. */
+  private main = $state.raw<Entity | null>(null);
+  private get rigged(): RiggedModel | null {
+    return this.main instanceof RiggedModel ? this.main : null;
+  }
   private entities: Entity[] = [];
   private framed = false;
   private map: BuiltMap | null = null;
 
   get clips(): ClipInfo[] {
-    return this.main && this.runtime ? this.runtime.clipsOf(this.main.id) : [];
+    return this.rigged && this.runtime ? this.runtime.clipsOf(this.rigged.id) : [];
   }
 
   /** Show a source, or nothing for null. */
@@ -75,7 +78,7 @@ export class PreviewController {
     if (gen !== this.gen) return;
     const entities = json.map((input) => restoreEntity(input));
     const main = entities[0];
-    if (!(main instanceof RiggedModel)) throw new Error('Nothing to preview');
+    if (!main) throw new Error('Nothing to preview');
     const runtime = new SceneRuntime();
     runtime.hooks = {
       // A model without a clip gets its idle one, as in the scene.
@@ -86,12 +89,12 @@ export class PreviewController {
         if (gen === this.gen) this.fail(message);
       }
     };
-    main.loop = this.loop;
+    if (main instanceof RiggedModel) main.loop = this.loop;
     this.entities = entities;
     this.main = main;
     this.runtime = runtime;
-    this.clip = main.clip ?? '';
-    this.playing = !!main.clip;
+    this.clip = main instanceof RiggedModel ? (main.clip ?? '') : '';
+    this.playing = !!this.clip;
     runtime.sync(entities);
     this.object = runtime.root;
   }
@@ -130,7 +133,7 @@ export class PreviewController {
 
   /** Play a clip of the model or character ('' stops). */
   async play(name: string) {
-    const main = this.main;
+    const main = this.rigged;
     if (!main || !this.runtime) return;
     main.loop = this.loop;
     main.set({ clip: name || undefined, freeze: undefined });
@@ -140,7 +143,7 @@ export class PreviewController {
   }
 
   togglePlay() {
-    const player = this.main?.player;
+    const player = this.rigged?.player;
     if (!player?.clip) return;
     if (this.playing) player.pause();
     else player.resume();
@@ -149,10 +152,11 @@ export class PreviewController {
 
   setLoop(loop: boolean) {
     this.loop = loop;
-    if (!this.main) return;
-    this.main.loop = loop;
+    const main = this.rigged;
+    if (!main) return;
+    main.loop = loop;
     if (this.clip) {
-      void this.main.playClip();
+      void main.playClip();
       this.playing = true;
     }
   }

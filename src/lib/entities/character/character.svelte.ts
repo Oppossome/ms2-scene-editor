@@ -13,6 +13,9 @@ import { expressionSchema } from './schemas.js';
 import type { OutfitSnapshot } from './outfits.js';
 import type { ItemEntity } from './item.svelte.js';
 import { RiggedModel } from '../rigged-model.svelte.js';
+import { fetchPlayerDummies, fetchTimeline, TimelinePlayer } from '../../assets/effects/timeline.js';
+import { FRAME_RATE } from '../../assets/frames.js';
+import type { ItemRecord } from '../../types.js';
 import { EntityProperty } from '../property.svelte.js';
 import type { RenderContext } from '../render-context.js';
 import { indexSchema, omitUndefined } from '../validation.js';
@@ -81,6 +84,18 @@ export class CharacterEntity extends RiggedModel {
       edit: (eye) => ({ eye })
     }))
   );
+  readonly effectsProperty = this.define(
+    'effects',
+    // Saved only when switched off, so characters saved before effects existed keep their JSON.
+    new EntityProperty(z.boolean().optional(), undefined, (value) => ({
+      key: 'effects',
+      label: 'Item effects',
+      section: 'Appearance',
+      type: 'bool',
+      value: value !== false,
+      edit: (on) => ({ effects: on ? undefined : false })
+    }))
+  );
   get gender() {
     return this.genderProperty.value;
   }
@@ -105,6 +120,11 @@ export class CharacterEntity extends RiggedModel {
   private itemTextures = new Map<string, string>();
   private reconciling = false;
   private dirty = false;
+  /** Idle effects of worn items (their characterIdle XML, or characterBattleIdle with weapons drawn). */
+  private readonly itemEffects = new Map<string, { path: string; player: TimelinePlayer | null }>();
+  private effectsDrawn: boolean | undefined;
+  private effectGen = 0;
+  private effectTime = 0;
 
   render(context: RenderContext) {
     super.render(context);
@@ -115,11 +135,13 @@ export class CharacterEntity extends RiggedModel {
     if (this.rig && (this.skinApplied !== this.skin || this.eyeApplied !== this.eye)) void this.applyAppearance();
     this.updateFace();
     this.syncItems();
+    if (this.rig) void this.syncEffects();
   }
 
   private async loadRig() {
     const gen = ++this.gen;
     this.clearPlayer();
+    this.clearEffects();
     this.rig?.dispose();
     this.rig = null;
     for (const item of this.context?.items(this.id) ?? []) item.resetMount();
@@ -171,6 +193,66 @@ export class CharacterEntity extends RiggedModel {
   tick(delta: number) {
     super.tick(delta);
     this.updateFace();
+    if (!this.itemEffects.size) return;
+    if (this.rig && this.rig.weaponsDrawn !== this.effectsDrawn) void this.syncEffects();
+    // A held frame holds the effects; otherwise they run on their own clock (idle auras loop).
+    if (this.freeze === undefined) this.effectTime += delta * (this.speed ?? 1);
+    const time = this.freeze === undefined ? this.effectTime : this.freeze / FRAME_RATE;
+    for (const effect of this.itemEffects.values()) effect.player?.update(time);
+  }
+
+  protected effectHost() {
+    const rig = this.rig;
+    return rig ? { root: rig.node('Scene Root') ?? rig.root, node: (name: string) => rig.node(name) } : null;
+  }
+
+  protected effectDummies() {
+    return fetchPlayerDummies(this.gender);
+  }
+
+  private clearEffects() {
+    this.effectGen++;
+    for (const effect of this.itemEffects.values()) effect.player?.dispose();
+    this.itemEffects.clear();
+    this.effectsDrawn = undefined;
+  }
+
+  /** Play the idle effects of what the character wears (none when effects are switched off). */
+  private async syncEffects() {
+    const rig = this.rig;
+    if (!rig) return;
+    const gen = ++this.effectGen;
+    this.effectsDrawn = rig.weaponsDrawn;
+    const wanted = new Map<string, string>();
+    if (this.effectsProperty.value !== false) {
+      const records = await Promise.all(
+        (this.context?.items(this.id) ?? []).filter((i) => i.visible).map((i) => getItem(i.itemId))
+      );
+      if (gen !== this.effectGen || rig !== this.rig || this.disposed) return;
+      for (const record of records) {
+        const path = itemEffectPath(record, rig.weaponsDrawn);
+        if (record && path) wanted.set(record.id, path);
+      }
+    }
+    for (const [id, effect] of this.itemEffects)
+      if (wanted.get(id) !== effect.path) {
+        effect.player?.dispose();
+        this.itemEffects.delete(id);
+      }
+    const host = this.effectHost()!;
+    for (const [id, path] of wanted) {
+      if (this.itemEffects.has(id)) continue;
+      const effect: { path: string; player: TimelinePlayer | null } = { path, player: null };
+      this.itemEffects.set(id, effect);
+      try {
+        const [timeline, dummies] = await Promise.all([fetchTimeline(path), fetchPlayerDummies(rig.gender)]);
+        if (gen !== this.effectGen || this.itemEffects.get(id) !== effect || !timeline) continue;
+        effect.player = new TimelinePlayer(timeline, host, { dummies, seed: 1 });
+      } catch (error) {
+        this.context?.error(`Could not load the effect ${path}`, error);
+      }
+    }
+    this.context?.changed();
   }
 
   /** Apply what is cheap (offsets, visibility, bones) and reconcile the worn set when it changed. */
@@ -268,6 +350,7 @@ export class CharacterEntity extends RiggedModel {
       item.renderOn(this);
     }
     this.updateFace();
+    void this.syncEffects();
     this.context?.reparent();
     this.context?.changed();
   }
@@ -293,8 +376,16 @@ export class CharacterEntity extends RiggedModel {
   }
 
   dispose() {
+    this.clearEffects();
     this.rig?.dispose();
     this.rig = null;
     super.dispose();
   }
+}
+
+/** The idle effect a worn item shows on its character: the battle one while weapons are drawn, when it has one. */
+export function itemEffectPath(record: ItemRecord | null | undefined, drawn: boolean): string | undefined {
+  const effects = record?.effects;
+  if (!effects) return undefined;
+  return (drawn ? effects.characterBattleIdle : undefined) ?? effects.characterIdle;
 }

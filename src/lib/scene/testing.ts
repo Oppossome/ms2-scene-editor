@@ -9,7 +9,8 @@ const required: Record<EntityType, Record<string, unknown>> = {
   prop: { glb: 'x.glb' },
   npc: { glb: 'x.glb' },
   character: { gender: 1 },
-  item: { itemId: '1' }
+  item: { itemId: '1' },
+  effect: { glb: 'x.glb' }
 };
 
 /** An entity with the values its type needs, for tests. */

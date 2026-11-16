@@ -25,6 +25,8 @@ export interface NewNode {
   attachBone?: string;
   beforeId?: string | null;
   glb?: string;
+  /** A model's always-on effect XML. */
+  effect?: string;
   mapId?: string;
   gender?: 0 | 1;
   skin?: number;

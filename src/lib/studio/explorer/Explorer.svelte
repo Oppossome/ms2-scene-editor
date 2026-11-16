@@ -22,7 +22,8 @@
     npc: 'N',
     character: 'C',
     item: 'I',
-    lighting: 'L'
+    lighting: 'L',
+    effect: 'E'
   };
 
   let filter = $state('');
@@ -126,7 +127,29 @@
   function onRowClick(row: Row) {
     if (row.type === 'node') store.select(row.node.id);
     else if (row.type === 'bone') store.selectBone(row.characterId, row.bone.name);
-    else store.toggle(row.key);
+    else toggleRow(row);
+  }
+
+  const boneWithin = (bone: BoneInfo, name: string): boolean =>
+    bone.children.some((child) => child.name === name || boneWithin(child, name));
+
+  /** Open or close a row; closing one that hides the selection selects the row itself (its character, for the Skeleton). */
+  function toggleRow(row: Row) {
+    if (row.open) {
+      const id = store.selectedId;
+      const bone = store.selectedBone;
+      if (row.type === 'node') {
+        const hidden =
+          (id && id !== row.node.id && ancestorsOf(store.nodes, id).some((a) => a.id === row.node.id)) ||
+          bone?.characterId === row.node.id;
+        if (hidden) store.select(row.node.id);
+      } else if (row.type === 'skeleton') {
+        if (bone?.characterId === row.character.id) store.select(row.character.id);
+      } else if (bone?.characterId === row.characterId && boneWithin(row.bone, bone.bone)) {
+        store.selectBone(row.characterId, row.bone.name);
+      }
+    }
+    store.toggle(row.key);
   }
 
   function onContext(e: MouseEvent, row: Row) {
@@ -273,7 +296,7 @@
             class:none={!row.expandable}
             onclick={(e) => {
               e.stopPropagation();
-              store.toggle(row.node.id);
+              toggleRow(row);
             }}
             tabindex="-1"
             aria-label="Expand">{row.open ? '▾' : '▸'}</button
@@ -328,7 +351,7 @@
             aria-label="Expand"
             onclick={(e) => {
               e.stopPropagation();
-              store.toggle(row.key);
+              toggleRow(row);
             }}>{row.open ? '▾' : '▸'}</button
           >
           <span class="badge k-bone">B</span>
@@ -487,6 +510,9 @@
   }
   .k-map {
     background: #6cb4e0;
+  }
+  .k-effect {
+    background: #f0d26c;
   }
   .k-skeleton,
   .k-bone {

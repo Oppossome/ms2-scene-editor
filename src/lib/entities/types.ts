@@ -4,6 +4,7 @@ import type { PropEntity } from './prop.svelte.js';
 import type { CharacterEntity } from './character/character.svelte.js';
 import type { ItemEntity } from './character/item.svelte.js';
 import type { LightingEntity } from './lighting.svelte.js';
+import type { EffectEntity } from './effect.svelte.js';
 
 export const ENTITY_LABELS = {
   group: 'Group',
@@ -11,9 +12,11 @@ export const ENTITY_LABELS = {
   npc: 'NPC',
   character: 'Character',
   item: 'Item',
-  lighting: 'Lighting'
+  lighting: 'Lighting',
+  effect: 'Effect'
 };
 export type EntityType = keyof typeof ENTITY_LABELS;
 export type EntityInput = Record<string, unknown>;
 
-export type Entity = GroupEntity | PropEntity | NpcEntity | CharacterEntity | ItemEntity | LightingEntity;
+export type Entity =
+  GroupEntity | PropEntity | NpcEntity | CharacterEntity | ItemEntity | LightingEntity | EffectEntity;
