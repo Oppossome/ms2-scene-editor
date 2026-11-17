@@ -1,5 +1,4 @@
 import { getItem } from '../entities/character/build.js';
-import type { SkillRecord } from '../types.js';
 import { downloadBlob, downloadBuffer, safeFilename } from '../export/glb.js';
 import { exportUserTextures, importUserTextures } from '../assets/user-textures.js';
 import { composeMap, expandLegacyMaps, fetchMap } from '../maps/entities.js';
@@ -102,7 +101,7 @@ export class Studio {
   /** Bumped to ask the Toolbox to put the cursor in its search box. */
   toolboxFocus = $state(0);
   /** Toolbox: current tab. */
-  toolboxTab = $state<'props' | 'npcs' | 'maps' | 'effects' | 'skills' | 'characters' | 'items'>('props');
+  toolboxTab = $state<'props' | 'npcs' | 'maps' | 'effects' | 'characters' | 'items'>('props');
 
   /**
    * The node the Toolbox last inserted and the parent it used. Inserting selects the new node, which would
@@ -174,41 +173,6 @@ export class Studio {
       position: parent ? [0, 0, 0] : this.spawnPoint()
     });
     return this.inserted(id, parent, bone);
-  }
-
-  /** The character or NPC a skill from the Toolbox plays on: the selected one. */
-  get skillTarget(): RiggedModel | null {
-    const node = this.store.selectedId ? this.store.node(this.store.selectedId) : undefined;
-    return node instanceof RiggedModel ? node : null;
-  }
-
-  /**
-   * Play a skill on the selected character or NPC: its first motion with effects whose clip the model has (or the
-   * first with effects), as the clip, with the motion's effects following it.
-   */
-  /** The motion of a skill a model plays: the first with effects whose clip it has (its own clip name), else the first with effects. */
-  skillMotion(target: RiggedModel, skill: SkillRecord): { index: number; clip: string | undefined } {
-    const clips = this.runtime.clipsOf(target.id);
-    const own = (clip: string) => clips.find((c) => c.name.toLowerCase() === clip.toLowerCase())?.name;
-    const withEffects = (m: SkillRecord['motions'][number]) => !!(m.cast || m.loop);
-    let index = skill.motions.findIndex((m) => withEffects(m) && own(m.clip));
-    if (index < 0) index = Math.max(0, skill.motions.findIndex(withEffects));
-    return { index, clip: own(skill.motions[index]?.clip ?? '') };
-  }
-
-  applySkill(skill: SkillRecord): string {
-    const target = this.skillTarget;
-    if (!target) {
-      this.message = 'Select a character or NPC to play the skill on.';
-      return '';
-    }
-    const { index, clip } = this.skillMotion(target, skill);
-    this.store.update(target.id, {
-      ...(clip ? { clip, freeze: undefined } : {}),
-      skill: { id: skill.id, name: skill.name, motion: index }
-    });
-    this.message = clip ? '' : `${target.name} has no ${skill.motions[index].clip} clip; the effects follow its own.`;
-    return target.id;
   }
 
   async insertMap(entry: { id: string; name: string }): Promise<string> {

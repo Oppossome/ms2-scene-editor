@@ -3,6 +3,7 @@
   import type { Studio } from '../controller.svelte.js';
   import type { PreviewSource } from '../preview/preview.svelte.js';
   import ClipPicker from '../preview/ClipPicker.svelte';
+  import SkillPicker from '../preview/SkillPicker.svelte';
   import FrameScrubber from './FrameScrubber.svelte';
   import NumberField from '../controls/NumberField.svelte';
   import PaletteRow from '../controls/PaletteRow.svelte';
@@ -57,6 +58,8 @@
   <select value={row.value} onchange={(e) => commit(row.edit(e.currentTarget.value))}>
     {#each row.options ?? [] as option (option.value)}<option value={option.value}>{option.label}</option>{/each}
   </select>
+{:else if row.type === 'skill'}
+  <SkillPicker clips={row.clips} value={row.value} {source} oncommit={(skill) => commit(row.edit(skill))} />
 {:else if row.type === 'clip'}
   <ClipPicker clips={row.clips ?? []} value={row.value} {source} oncommit={(value) => commit(row.edit(value))} />
 {:else if row.type === 'backdrop'}

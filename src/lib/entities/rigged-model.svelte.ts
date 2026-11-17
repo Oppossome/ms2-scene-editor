@@ -4,6 +4,7 @@ import { AnimationPlayer } from '../assets/animation.js';
 import { idleClip } from '../assets/clips.js';
 import { FRAME_RATE, lastFrame } from '../assets/frames.js';
 import type { ClipInfo, EffectDummy, SkillRecord } from '../types.js';
+import { fetchSkill, skillMotion } from '../assets/effects/skills.js';
 import { fetchTimeline, TimelinePlayer, type TimelineHost } from '../assets/effects/timeline.js';
 import { BaseEntity } from './base.svelte.js';
 import { EntityProperty, type PropContext, type PropertyControl } from './property.svelte.js';
@@ -16,23 +17,6 @@ const optionalText = z.string().min(1).optional();
 export const skillSchema = z.object({ id: z.string().min(1), name: z.string(), motion: indexSchema }).optional();
 export type SkillRef = z.infer<typeof skillSchema>;
 
-const skillCache = new Map<string, Promise<SkillRecord | null>>();
-function fetchSkill(id: string): Promise<SkillRecord | null> {
-  let hit = skillCache.get(id);
-  if (!hit) {
-    hit = fetch(`/api/skills/${encodeURIComponent(id)}`).then((r) =>
-      r.ok
-        ? (r.json() as Promise<SkillRecord>)
-        : r.status === 404
-          ? null
-          : Promise.reject(new Error(`HTTP ${r.status}`))
-    );
-    hit.catch(() => skillCache.delete(id));
-    skillCache.set(id, hit);
-  }
-  return hit;
-}
-
 /** A model with a skeleton and animation clips: the clip, speed and held frame properties and their playback. */
 export abstract class RiggedModel extends BaseEntity {
   readonly clipProperty = this.define('clip', new EntityProperty(optionalText, undefined));
@@ -40,10 +24,27 @@ export abstract class RiggedModel extends BaseEntity {
   readonly freezeProperty = this.define('freeze', new EntityProperty(indexSchema.optional(), undefined));
   readonly skillProperty = this.define(
     'skill',
-    new EntityProperty(skillSchema, undefined, (value) =>
-      value
-        ? { key: 'skill', label: 'Skill', section: 'Animation', type: 'readonly', value: `${value.name} (${value.id})` }
-        : null
+    new EntityProperty(skillSchema, undefined, (value, ctx) =>
+      // Like the clip row: only for models with clips (or one that already shows a skill).
+      !value && !ctx.clips.length
+        ? null
+        : {
+            key: 'skill',
+            label: 'Skill',
+            section: 'Animation',
+            type: 'skill',
+            value: value ? { id: value.id, name: value.name } : null,
+            clips: ctx.clips,
+            // A skill plays its motion's clip (when the model has it) with that motion's effects; none stops the effects.
+            edit: (skill: SkillRecord | null) => {
+              if (!skill) return { skill: undefined };
+              const { index, clip } = skillMotion(ctx.clips, skill);
+              return {
+                ...(clip ? { clip, freeze: undefined } : {}),
+                skill: { id: skill.id, name: skill.name, motion: index }
+              };
+            }
+          }
     )
   );
   get skill() {
@@ -71,15 +72,6 @@ export abstract class RiggedModel extends BaseEntity {
 
   controls(ctx: PropContext): PropertyControl[] {
     const rows = super.controls(ctx);
-    if (this.skill)
-      rows.push({
-        key: 'stopSkill',
-        label: '',
-        section: 'Animation',
-        type: 'action',
-        value: 'Stop skill effects',
-        edit: () => ({ skill: undefined })
-      });
     if (!ctx.clips.length) return rows;
     return [
       ...rows,
