@@ -7,8 +7,9 @@ import path from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
 import type {
   EffectRecord,
-  SkillMotion,
-  SkillRecord,
+  EffectTimelineNif,
+  EmoteMotion,
+  EmoteRecord,
   Gender,
   IndexMeta,
   ItemAsset,
@@ -282,18 +283,18 @@ function buildFlatModels(): { flats: Record<string, string>; llids: Record<strin
   return { flats: out, llids };
 }
 
-// ---- skills: the clips and effect XMLs of each skill's first level (only skills that show an effect)
-function buildSkills(): SkillRecord[] {
+// ---- emotes: the clips and effect XMLs of each skill's first level (skills that show an effect, and the emote skills)
+function buildEmotes(): EmoteRecord[] {
   const names = new Map<string, string>();
   const stringDir = path.join(ROOT, 'Xml/string/en');
   for (const file of fs.existsSync(stringDir) ? fs.readdirSync(stringDir) : [])
     if (/^skillname.*\.xml$/i.test(file)) for (const [id, v] of readNames(file)) if (v.name) names.set(id, v.name);
   const attr = (tag: string, name: string) => new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1]?.trim() ?? '';
-  const out: SkillRecord[] = [];
+  const out: EmoteRecord[] = [];
   for (const file of walk(path.join(ROOT, 'Xml/skill'), '.xml')) {
     const text = readText(file);
     const level = /<level\b[^>]*>([\s\S]*?)<\/level>/.exec(text)?.[1] ?? '';
-    const motions: SkillMotion[] = [];
+    const motions: EmoteMotion[] = [];
     for (const tag of level.match(/<motionProperty\b[^>]*>/g) ?? []) {
       const clip = attr(tag, 'sequenceName');
       if (!clip) continue;
@@ -301,11 +302,144 @@ function buildSkills(): SkillRecord[] {
       const loop = attr(tag, 'loopEffect').replace(/\\/g, '/');
       motions.push({ clip, ...(cast ? { cast } : {}), ...(loop ? { loop } : {}) });
     }
-    if (!motions.some((m) => m.cast || m.loop)) continue;
     const id = path.basename(file, '.xml');
+    if (!motions.some((m) => m.cast || m.loop)) {
+      // Emotes name their clip in <kinds emotion=...> instead (and keep effects in a table of their own).
+      const kinds = /<kinds\b[^>]*>/.exec(text)?.[0] ?? '';
+      const emote = emoteMotions(attr(kinds, 'emotionType'), attr(kinds, 'emotion'), emoteEffects.get(id));
+      if (!emote.length) continue;
+      motions.splice(0, motions.length, ...emote);
+    }
     out.push({ id, name: names.get(id) ?? id, motions });
   }
   return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+// ---- emotes: clips by name (emotionType 1) or a couple emote (2, Xml/table/coupleemotion.xml), plus their effects
+const bodyClips = new Set<string>();
+for (const rel of glbIndex.keys()) {
+  const m = /^character\/(?:male\/m_body|female\/f_body)\.anims\/([^/]+)\.glb$/.exec(rel);
+  if (m) bodyClips.add(m[1]);
+}
+
+/** Effect XML by emote skill id (`gosEmotion`, else `gosEmotionIdle`; the effect for both genders when there is one). */
+const emoteEffects = new Map<string, string>();
+{
+  const file = path.join(ROOT, 'Xml/table/stateeffectpc.xml');
+  const text = fs.existsSync(file) ? readText(file) : '';
+  const found: { id: string; effect: string; rank: number }[] = [];
+  for (const [, type, effect, body] of text.matchAll(
+    /<StateEffect\b[^>]*stateType="([^"]*)"[^>]*effect="([^"]*)"[^>]*>([\s\S]*?)<\/StateEffect>/g
+  )) {
+    const id = /emotionSkillID="(\d+)"/.exec(body)?.[1];
+    const gender = /gender="(\d)"/.exec(body)?.[1] ?? '2';
+    if (id && effect) found.push({ id, effect, rank: (type === 'gosEmotion' ? 0 : 2) + (gender === '2' ? 0 : 1) });
+  }
+  for (const f of found.sort((a, b) => a.rank - b.rank))
+    if (!emoteEffects.has(f.id)) emoteEffects.set(f.id, f.effect.replace(/\\/g, '/'));
+}
+
+/** Couple emotes by code: every clip either partner plays, ready then loop (a model plays the ones of its gender). */
+const coupleClips = new Map<string, string[]>();
+{
+  const file = path.join(ROOT, 'Xml/table/coupleemotion.xml');
+  for (const tag of (fs.existsSync(file) ? readText(file) : '').match(/<coupleEmotion\b[^>]*>/g) ?? []) {
+    const code = /\bcode="(\d+)"/.exec(tag)?.[1];
+    if (!code) continue;
+    const clips = [...tag.matchAll(/animation\w+_(?:male|female|requestUser|targetUser)="([^"]*)"/g)]
+      .flatMap(([, list]) => list.split(','))
+      .map((c) => c.trim())
+      .filter((c) => c && bodyClips.has(c.toLowerCase()));
+    coupleClips.set(code, [...new Set(clips)]);
+  }
+}
+
+function emoteMotions(type: string, emotion: string, effect: string | undefined): EmoteMotion[] {
+  const fx = effect ? { cast: effect } : {};
+  if (type === '2') return (coupleClips.get(emotion) ?? []).map((clip) => ({ clip, ...fx }));
+  if (type !== '1' || !emotion) return [];
+  const e = emotion.toLowerCase();
+  const main = [`emotion_${e}`, `emotion_${e}_a`, e, `emotion_sit_${e}`].find((c) => bodyClips.has(c));
+  if (!main) return effect ? [{ clip: `Emotion_${emotion}`, ...fx }] : [];
+  // Its other parts: the ready/loop/idle clips that share its name (not other lettered emotes: Dance_A vs Dance_C).
+  const base = main.replace(/(_(ready|loop|idle|down|talk|bore)(_[a-z]\d*)?)+$/, '').replace(/_a$/, '');
+  const part = /^(ready|loop|idle|down|talk|bore)(_|$)|_(ready|loop|idle|down|talk|bore)(_|$)/;
+  const related = [...bodyClips]
+    .filter((c) => c !== main && c.startsWith(`${base}_`) && part.test(c.slice(base.length + 1)))
+    .sort();
+  return [main, ...related].map((clip) => ({ clip, ...fx }));
+}
+
+// ---- instruments: playing one is an emote whose props are the instrument (Xml/table/instrumentinfo.xml)
+function buildInstruments(): EmoteRecord[] {
+  const file = path.join(ROOT, 'Xml/table/instrumentinfo.xml');
+  if (!fs.existsSync(file)) return [];
+  const attr = (tag: string, name: string) => new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1]?.trim() ?? '';
+  const itemNames = readNames('itemname.xml');
+  const itemXml = (id: string) => {
+    const full = path.join(ROOT, 'Xml/item', id[0] ?? '', id.slice(1, 3), `${id}.xml`);
+    return fs.existsSync(full) ? readText(full) : '';
+  };
+
+  // The item a player plays it with names it best (`OpenInstrument` with the instrument id).
+  const playedBy = new Map<string, string>();
+  const itemDir = path.join(ROOT, 'Xml/item/3');
+  for (const xml of fs.existsSync(itemDir) ? walk(itemDir, '.xml') : []) {
+    const id = /OpenInstrument" parameter="(\d+)"/.exec(readText(xml))?.[1];
+    const name = itemNames.get(path.basename(xml, '.xml'))?.name;
+    if (id && name && !playedBy.has(id)) playedBy.set(id, name);
+  }
+
+  // Instrument models are effect NIFs; a .kfm stand is converted under a folder of its own, so fall back to the name.
+  const byBase = new Map<string, string>();
+  for (const rel of glbIndex.values())
+    if (/^effect\//i.test(rel)) byBase.set(path.posix.basename(rel, '.glb').toLowerCase(), rel);
+  const prop = (asset: string, parentNode: string): EffectTimelineNif | null => {
+    const nif = asset.replace(/\\/g, '/').replace(/^.*?model\/effect\//i, '');
+    const stem = nif.replace(/\.(nif|kfm)$/i, '');
+    const glb = glbFor(`Effect/${stem}`) ?? byBase.get(path.posix.basename(stem).toLowerCase()) ?? null;
+    if (!glb) return (warn('instrument model not converted'), null);
+    return {
+      kind: 'nif',
+      file: `${stem}.nif`,
+      glb,
+      startDelay: 0,
+      duration: null,
+      loop: true,
+      parentNode,
+      attachToNode: true,
+      applyNodeTransform: true,
+      translate: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: 1
+    };
+  };
+
+  const out: EmoteRecord[] = [];
+  for (const tag of readText(file).match(/<instrument\b[^>]*>/g) ?? []) {
+    const id = attr(tag, 'id');
+    const props: EffectTimelineNif[] = [];
+    const stand = attr(tag, 'asset');
+    if (stand) props.push(...[prop(stand, 'Scene Root')].filter((p) => !!p));
+    const item = attr(tag, 'equipItemId');
+    for (const [, asset, node] of itemXml(item).matchAll(/<asset name="([^"]+)"[^>]*?targetnode="([^"]*)"/g)) {
+      const held = prop(asset, node || 'Weapon_Hand_R_Point');
+      if (held && !props.some((p) => p.glb === held.glb && p.parentNode === held.parentNode)) props.push(held);
+    }
+    const effect = attr(tag, 'playEffect').replace(/\\/g, '/');
+    const motions: EmoteMotion[] = [1, 2, 3, 4]
+      .map((n) => attr(tag, `animationPlayLevel${n}`))
+      .filter(Boolean)
+      .map((clip) => ({ clip, ...(effect ? { cast: effect } : {}) }));
+    for (const key of ['animationPlayIdle', 'animationReady']) {
+      const clip = attr(tag, key);
+      if (clip) motions.push({ clip });
+    }
+    if (!motions.length) continue;
+    const name = playedBy.get(id) ?? itemNames.get(item)?.name.replace(/\s*\(Dummy\)$/i, '') ?? `Instrument ${id}`;
+    out.push({ id: `instrument-${id}`, name, motions, ...(props.length ? { props } : {}) });
+  }
+  return out;
 }
 
 // ---- effects: every converted effect model
@@ -336,8 +470,8 @@ console.log('flat models...');
 const { flats, llids } = buildFlatModels();
 console.log('effects...');
 const effects = buildEffects();
-console.log('skills...');
-const skills = buildSkills();
+console.log('emotes...');
+const emotes = [...buildEmotes(), ...buildInstruments()];
 
 write('palettes.json', palettes);
 write('items.json', items);
@@ -346,7 +480,7 @@ write('maps.json', maps);
 write('flats.json', flats);
 write('llids.json', llids);
 write('effects.json', effects);
-write('skills.json', skills);
+write('emotes.json', emotes);
 const meta: IndexMeta = {
   builtAt: new Date().toISOString(),
   items: items.length,
@@ -355,7 +489,7 @@ const meta: IndexMeta = {
   flatModels: Object.keys(flats).length,
   llidModels: Object.keys(llids).length,
   effects: effects.length,
-  skills: skills.length,
+  emotes: emotes.length,
   palettes: Object.keys(palettes).length,
   warnings
 };

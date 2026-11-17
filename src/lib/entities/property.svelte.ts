@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ClipInfo, SkillRecord } from '../types.js';
+import type { ClipInfo, EmoteRecord } from '../types.js';
 import type { Vec3 } from './constants.js';
 import type { Entity, EntityInput } from './types.js';
 import type { PickChannel } from './character/appearance.js';
@@ -72,12 +72,12 @@ export type PropertyControl =
     })
   | (ControlBase & { type: 'bool'; value: boolean; edit: (value: boolean) => EntityInput })
   | (ControlBase & {
-      type: 'skill';
-      /** The skill in effect, or null. */
+      type: 'emote';
+      /** The emote in effect, or null. */
       value: { id: string; name: string } | null;
-      /** The model's clips, to pick the skill's motion. */
+      /** The model's clips, to pick the emote's motion. */
       clips: ClipInfo[];
-      edit: (skill: SkillRecord | null) => EntityInput;
+      edit: (emote: EmoteRecord | null) => EntityInput;
     })
   | (ControlBase & { type: 'readonly'; value: string })
   | (ControlBase & { type: 'transport'; frame?: number; max?: number })

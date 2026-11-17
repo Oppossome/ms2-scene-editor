@@ -3,8 +3,8 @@ import type { AnimationClip } from 'three';
 import { AnimationPlayer } from '../assets/animation.js';
 import { idleClip } from '../assets/clips.js';
 import { FRAME_RATE, lastFrame } from '../assets/frames.js';
-import type { ClipInfo, EffectDummy, SkillRecord } from '../types.js';
-import { fetchSkill, skillMotion } from '../assets/effects/skills.js';
+import type { ClipInfo, EffectDummy, EmoteRecord } from '../types.js';
+import { fetchEmote, emoteMotion } from '../assets/effects/emotes.js';
 import { fetchTimeline, TimelinePlayer, type TimelineHost } from '../assets/effects/timeline.js';
 import { BaseEntity } from './base.svelte.js';
 import { EntityProperty, type PropContext, type PropertyControl } from './property.svelte.js';
@@ -13,47 +13,53 @@ import { finite, indexSchema } from './validation.js';
 
 const optionalText = z.string().min(1).optional();
 
-/** The skill a model shows: the effects of one of its motions play while that motion's clip does. */
-export const skillSchema = z.object({ id: z.string().min(1), name: z.string(), motion: indexSchema }).optional();
-export type SkillRef = z.infer<typeof skillSchema>;
+/** The emote a model shows: the effects of one of its motions play while that motion's clip does. */
+export const emoteSchema = z.object({ id: z.string().min(1), name: z.string(), motion: indexSchema }).optional();
+export type EmoteRef = z.infer<typeof emoteSchema>;
 
 /** A model with a skeleton and animation clips: the clip, speed and held frame properties and their playback. */
 export abstract class RiggedModel extends BaseEntity {
   readonly clipProperty = this.define('clip', new EntityProperty(optionalText, undefined));
   readonly speedProperty = this.define('speed', new EntityProperty(finite.positive().optional(), undefined));
   readonly freezeProperty = this.define('freeze', new EntityProperty(indexSchema.optional(), undefined));
-  readonly skillProperty = this.define(
-    'skill',
-    new EntityProperty(skillSchema, undefined, (value, ctx) =>
-      // Like the clip row: only for models with clips (or one that already shows a skill).
+  readonly emoteProperty = this.define(
+    'emote',
+    new EntityProperty(emoteSchema, undefined, (value, ctx) =>
+      // Like the clip row: only for models with clips (or one that already shows an emote).
       !value && !ctx.clips.length
         ? null
         : {
-            key: 'skill',
-            label: 'Skill',
+            key: 'emote',
+            label: 'Emotes',
             section: 'Animation',
-            type: 'skill',
+            type: 'emote',
             value: value ? { id: value.id, name: value.name } : null,
             clips: ctx.clips,
-            // A skill plays its motion's clip (when the model has it) with that motion's effects; none stops the effects.
-            edit: (skill: SkillRecord | null) => {
-              if (!skill) return { skill: undefined };
-              const { index, clip } = skillMotion(ctx.clips, skill);
+            // An emote plays its motion's clip (when the model has it) with that motion's effects; none stops the effects.
+            edit: (emote: EmoteRecord | null) => {
+              if (!emote) return { emote: undefined };
+              const { index, clip } = emoteMotion(ctx.clips, emote);
               return {
                 ...(clip ? { clip, freeze: undefined } : {}),
-                skill: { id: skill.id, name: skill.name, motion: index }
+                emote: { id: emote.id, name: emote.name, motion: index }
               };
             }
           }
     )
   );
-  get skill() {
-    return this.skillProperty.value;
+  get emote() {
+    return this.emoteProperty.value;
   }
-  /** The skill's effects, and the clip they belong to. */
-  private skillEffects: { clip: string | null; players: TimelinePlayer[] } | null = null;
-  private skillApplied: string | undefined;
-  private skillGen = 0;
+  /** The emote's effects, and the clip they belong to. */
+  private emoteEffects: {
+    clip: string | null;
+    players: TimelinePlayer[];
+    /** An instrument's models: shown while any of its motions plays (switching from playing to idle keeps them). */
+    props: TimelinePlayer | null;
+    propClips: Set<string>;
+  } | null = null;
+  private emoteApplied: string | undefined;
+  private emoteGen = 0;
   get clip() {
     return this.clipProperty.value;
   }
@@ -119,10 +125,10 @@ export abstract class RiggedModel extends BaseEntity {
     if (this.player) this.player.mixer.timeScale = this.speed ?? 1;
     if (this.clipRequested !== this.clip) void this.playClip();
     else if (this.freezeApplied !== this.freeze) this.applyFreeze();
-    if (JSON.stringify(this.skill ?? null) !== this.skillApplied) void this.loadSkill();
+    if (JSON.stringify(this.emote ?? null) !== this.emoteApplied) void this.loadEmote();
   }
 
-  /** Where skill effects go: the model's nodes by game name (null until the model is loaded). */
+  /** Where emote effects go: the model's nodes by game name (null until the model is loaded). */
   protected effectHost(): TimelineHost | null {
     return null;
   }
@@ -132,51 +138,59 @@ export abstract class RiggedModel extends BaseEntity {
     return Promise.resolve([]);
   }
 
-  private clearSkill() {
-    for (const player of this.skillEffects?.players ?? []) player.dispose();
-    this.skillEffects = null;
+  private clearEmote() {
+    for (const player of this.emoteEffects?.players ?? []) player.dispose();
+    this.emoteEffects?.props?.dispose();
+    this.emoteEffects = null;
   }
 
-  private async loadSkill() {
-    const ref = this.skill;
+  private async loadEmote() {
+    const ref = this.emote;
     const host = this.effectHost();
-    const gen = ++this.skillGen;
-    this.clearSkill();
+    const gen = ++this.emoteGen;
+    this.clearEmote();
     if (!ref) {
-      this.skillApplied = 'null';
+      this.emoteApplied = 'null';
       return;
     }
     // Without a model yet, try again on the next render.
     if (!host) return;
-    this.skillApplied = JSON.stringify(ref);
+    this.emoteApplied = JSON.stringify(ref);
     try {
-      const [record, dummies] = await Promise.all([fetchSkill(ref.id), this.effectDummies()]);
+      const [record, dummies] = await Promise.all([fetchEmote(ref.id), this.effectDummies()]);
       const motion = record?.motions[ref.motion];
-      if (!motion || gen !== this.skillGen || this.disposed) return;
+      if (!motion || gen !== this.emoteGen || this.disposed) return;
       const timelines = await Promise.all(
         [motion.cast, motion.loop].flatMap((path) => (path ? [fetchTimeline(path)] : []))
       );
-      // A model without the skill's clip shows its effects on whatever it plays.
+      // A model without the emote's clip shows its effects on whatever it plays.
       const hasClip = !!(await this.loadClip(motion.clip).catch(() => undefined));
-      if (gen !== this.skillGen || this.disposed) return;
-      this.skillEffects = {
+      if (gen !== this.emoteGen || this.disposed) return;
+      this.emoteEffects = {
         clip: hasClip ? motion.clip.toLowerCase() : null,
-        players: timelines.flatMap((t) => (t ? [new TimelinePlayer(t, host, { dummies })] : []))
+        players: timelines.flatMap((t) => (t ? [new TimelinePlayer(t, host, { dummies })] : [])),
+        props: record.props?.length
+          ? new TimelinePlayer({ path: `${record.id}/props`, entries: record.props }, host, { dummies })
+          : null,
+        propClips: new Set(record.motions.map((m) => m.clip.toLowerCase()))
       };
     } catch (error) {
       this.context?.error(`Could not load the effects of ${ref.name}`, error);
     }
   }
 
-  /** Skill effects follow the clip's own time (so they loop, pause and scrub with it); hidden on other clips. */
-  protected updateSkillEffects() {
-    // A skill set before the model finished loading starts once it has.
-    if (this.skill && this.skillApplied !== JSON.stringify(this.skill) && this.effectHost()) void this.loadSkill();
-    const effects = this.skillEffects;
+  /** Emote effects follow the clip's own time (so they loop, pause and scrub with it); hidden on other clips. */
+  protected updateEmoteEffects() {
+    // An emote set before the model finished loading starts once it has.
+    if (this.emote && this.emoteApplied !== JSON.stringify(this.emote) && this.effectHost()) void this.loadEmote();
+    const effects = this.emoteEffects;
     if (!effects) return;
     const playing = effects.clip === null || this.player?.clip?.name.toLowerCase() === effects.clip;
     const time = playing ? (this.player?.time ?? 0) : -1;
     for (const player of effects.players) player.update(time);
+    const current = this.player?.clip?.name.toLowerCase();
+    const withProps = effects.clip === null || (!!current && effects.propClips.has(current));
+    effects.props?.update(withProps ? (this.player?.time ?? 0) : -1);
   }
 
   protected abstract loadClip(name: string): Promise<AnimationClip | undefined>;
@@ -220,12 +234,12 @@ export abstract class RiggedModel extends BaseEntity {
 
   tick(delta: number) {
     this.player?.update(delta);
-    this.updateSkillEffects();
+    this.updateEmoteEffects();
   }
 
   protected clearPlayer() {
-    this.clearSkill();
-    this.skillApplied = undefined;
+    this.clearEmote();
+    this.emoteApplied = undefined;
     this.player?.dispose();
     this.player = null;
     this.clipRequested = undefined;

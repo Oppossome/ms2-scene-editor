@@ -117,8 +117,8 @@ export interface EffectRecord {
   glb: string;
 }
 
-/** One motion of a skill: the clip the caster plays and the effect XMLs that go with it (relative to Xml/effect). */
-export interface SkillMotion {
+/** One motion of an emote: the clip the caster plays and the effect XMLs that go with it (relative to Xml/effect). */
+export interface EmoteMotion {
   clip: string;
   /** Played from the start of the clip. */
   cast?: string;
@@ -126,11 +126,19 @@ export interface SkillMotion {
   loop?: string;
 }
 
-/** A skill with effects (its first level): what the Skills tab lists and applies to a character or NPC. */
-export interface SkillRecord {
+/**
+ * An emote: a skill with effects or an emote clip (from its first level), or an instrument. What the Emotes row lists
+ * and applies to a character or NPC.
+ */
+export interface EmoteRecord {
   id: string;
   name: string;
-  motions: SkillMotion[];
+  motions: EmoteMotion[];
+  /**
+   * Models shown with every motion, for as long as the emote is set: an instrument (`instrument-<id>`, from
+   * Xml/table/instrumentinfo.xml) puts its stand (a piano, a drum) at the model's origin and its held parts in the hands.
+   */
+  props?: EffectTimelineNif[];
 }
 
 /** One NIF of an effect timeline (Xml/effect/*.xml), placed on a node of the model that plays it. */
@@ -190,7 +198,7 @@ export interface IndexMeta {
   llidModels: number;
   /** Absent in indexes built before effects were indexed. */
   effects?: number;
-  skills?: number;
+  emotes?: number;
   palettes: number;
   warnings: Record<string, number>;
 }
